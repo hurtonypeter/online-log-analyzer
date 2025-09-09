@@ -2,17 +2,18 @@
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
 
-	let logInput = $state(
-		'{"foo":{"bar":1}, "baz": 3, "zip": 32, "array": [{"meh": 49}, {"meh": 50}]}\n{"foo":{"bar":2}, "baz": 4}\n{"foo":{"bar":3}, "baz": 5}\n{"foo":{"bar":4}, "baz": 6}'
-	);
+	let logInput = $state('');
 	let parsedLogs = $state<any[]>([]);
 	let columns = $state([{ id: 'line', name: 'Raw Line', field: '__raw__', hidden: false }]);
 	let newFieldName = $state('');
 	let draggedColumn: number | null = null;
 	let selectedLog = $state<any>(null);
 	let sidebarOpen = $state(false);
+	let sortState = $state<{ column: string; direction: 'asc' | 'desc' } | null>(null);
 
 	const STORAGE_KEY = 'loganalyzer-columns';
+	const SORT_STORAGE_KEY = 'loganalyzer-sort';
+	const INPUT_STORAGE_KEY = 'loganalyzer-input';
 
 	function saveColumnsToStorage() {
 		if (browser) {
@@ -43,6 +44,56 @@
 		}
 	}
 
+	function saveSortToStorage() {
+		if (browser && sortState) {
+			try {
+				localStorage.setItem(SORT_STORAGE_KEY, JSON.stringify(sortState));
+			} catch (error) {
+				console.warn('Failed to save sort state to localStorage:', error);
+			}
+		}
+	}
+
+	function loadSortFromStorage() {
+		if (browser) {
+			try {
+				const saved = localStorage.getItem(SORT_STORAGE_KEY);
+				if (saved) {
+					sortState = JSON.parse(saved);
+				}
+			} catch (error) {
+				console.warn('Failed to load sort state from localStorage:', error);
+			}
+		}
+	}
+
+	function saveInputToStorage() {
+		if (browser) {
+			try {
+				localStorage.setItem(INPUT_STORAGE_KEY, logInput);
+			} catch (error) {
+				console.warn('Failed to save log input to localStorage:', error);
+			}
+		}
+	}
+
+	function loadInputFromStorage() {
+		if (browser) {
+			try {
+				const saved = localStorage.getItem(INPUT_STORAGE_KEY);
+				if (saved) {
+					logInput = saved;
+				} else {
+					// Provide sample data for new users
+					logInput =
+						'{"foo":{"bar":1}, "baz": 3, "zip": 32, "array": [{"meh": 49}, {"meh": 50}]}\n{"foo":{"bar":2}, "baz": 4}\n{"foo":{"bar":3}, "baz": 5}\n{"foo":{"bar":4}, "baz": 6}';
+				}
+			} catch (error) {
+				console.warn('Failed to load log input from localStorage:', error);
+			}
+		}
+	}
+
 	function parseLogLines(input: string) {
 		const lines = input.split('\n').filter((line) => line.trim());
 		const logs: any[] = [];
@@ -56,7 +107,12 @@
 			}
 		}
 
-		parsedLogs = logs;
+		// Apply saved sorting if it exists
+		if (sortState) {
+			parsedLogs = applySorting(logs, sortState.column, sortState.direction);
+		} else {
+			parsedLogs = logs;
+		}
 	}
 
 	function addColumn() {
@@ -121,17 +177,23 @@
 		return current ?? '';
 	}
 
-	function sortColumn(columnField: string, ascending = true) {
-		parsedLogs = [...parsedLogs].sort((a, b) => {
+	function applySorting(logs: any[], columnField: string, direction: 'asc' | 'desc') {
+		return [...logs].sort((a, b) => {
 			const aVal = getNestedValue(a, columnField);
 			const bVal = getNestedValue(b, columnField);
 
 			if (typeof aVal === 'string' && typeof bVal === 'string') {
-				return ascending ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+				return direction === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
 			}
 
-			return ascending ? (aVal > bVal ? 1 : -1) : bVal > aVal ? 1 : -1;
+			return direction === 'asc' ? (aVal > bVal ? 1 : -1) : bVal > aVal ? 1 : -1;
 		});
+	}
+
+	function sortColumn(columnField: string, direction: 'asc' | 'desc') {
+		sortState = { column: columnField, direction };
+		parsedLogs = applySorting(parsedLogs, columnField, direction);
+		saveSortToStorage();
 	}
 
 	function handleDragStart(index: number) {
@@ -179,7 +241,9 @@
 	}
 
 	onMount(() => {
+		loadInputFromStorage();
 		loadColumnsFromStorage();
+		loadSortFromStorage();
 	});
 
 	$effect(() => {
@@ -188,6 +252,10 @@
 
 	$effect(() => {
 		saveColumnsToStorage();
+	});
+
+	$effect(() => {
+		saveInputToStorage();
 	});
 </script>
 
@@ -211,7 +279,7 @@
 			</div>
 
 			<!-- Column Management -->
-			<div class="mb-6 rounded-lg bg-gray-50 p-4">
+			<div class="mb-6 rounded-lg bg-gray-50">
 				<div class="mb-3 flex items-center justify-between">
 					<h2 class="text-lg font-semibold">Manage Table Columns</h2>
 					<span class="text-xs text-gray-500">💾 Columns auto-saved to browser</span>
@@ -286,17 +354,32 @@
 											class="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
 										>
 											<div class="flex items-center gap-2">
-												<span>{column.name}</span>
+												<span
+													class={sortState?.column === column.field
+														? 'font-semibold text-blue-600'
+														: ''}>{column.name}</span
+												>
+												{#if sortState?.column === column.field}
+													<span class="text-xs text-blue-600">
+														{sortState.direction === 'asc' ? '↑' : '↓'}
+													</span>
+												{/if}
 												<div class="flex flex-col">
 													<button
-														onclick={() => sortColumn(column.field, true)}
-														class="text-xs text-gray-400 hover:text-gray-600"
+														onclick={() => sortColumn(column.field, 'asc')}
+														class="text-xs transition-colors {sortState?.column === column.field &&
+														sortState?.direction === 'asc'
+															? 'text-blue-600'
+															: 'text-gray-400 hover:text-gray-600'}"
 													>
 														▲
 													</button>
 													<button
-														onclick={() => sortColumn(column.field, false)}
-														class="text-xs text-gray-400 hover:text-gray-600"
+														onclick={() => sortColumn(column.field, 'desc')}
+														class="text-xs transition-colors {sortState?.column === column.field &&
+														sortState?.direction === 'desc'
+															? 'text-blue-600'
+															: 'text-gray-400 hover:text-gray-600'}"
 													>
 														▼
 													</button>
