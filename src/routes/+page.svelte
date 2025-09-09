@@ -3,7 +3,7 @@
 		'{"foo":{"bar":1}, "baz": 3, "zip": 32, "array": [{"meh": 49}, {"meh": 50}]}\n{"foo":{"bar":2}, "baz": 4}'
 	);
 	let parsedLogs = $state<any[]>([]);
-	let columns = $state([{ id: 'line', name: 'Raw Line', field: '__raw__' }]);
+	let columns = $state([{ id: 'line', name: 'Raw Line', field: '__raw__', hidden: false }]);
 	let newFieldName = $state('');
 	let draggedColumn: number | null = null;
 
@@ -26,7 +26,7 @@
 	function addColumn() {
 		if (newFieldName.trim()) {
 			const id = Date.now().toString();
-			const newColumn = { id, name: newFieldName.trim(), field: newFieldName.trim() };
+			const newColumn = { id, name: newFieldName.trim(), field: newFieldName.trim(), hidden: false };
 
 			// Find the index of the raw line column
 			const rawLineIndex = columns.findIndex((col) => col.field === '__raw__');
@@ -44,6 +44,12 @@
 		if (columns[index].field !== '__raw__') {
 			columns = columns.filter((_, i) => i !== index);
 		}
+	}
+
+	function toggleColumnVisibility(index: number) {
+		const newColumns = [...columns];
+		newColumns[index].hidden = !newColumns[index].hidden;
+		columns = newColumns;
 	}
 
 	function getNestedValue(obj: any, path: string): any {
@@ -150,7 +156,7 @@
 		<div class="flex flex-wrap gap-2">
 			{#each columns as column, index (column.id)}
 				<div
-					class="flex cursor-move items-center gap-2 rounded-lg border bg-white px-3 py-1"
+					class="flex cursor-move items-center gap-2 rounded-lg border px-3 py-1 {column.hidden ? 'bg-gray-200 opacity-60' : 'bg-white'}"
 					role="button"
 					tabindex="0"
 					draggable="true"
@@ -158,15 +164,25 @@
 					ondragover={handleDragOver}
 					ondrop={(e) => handleDrop(e, index)}
 				>
-					<span class="text-sm">{column.name}</span>
-					{#if column.field !== '__raw__'}
+					<span class="text-sm {column.hidden ? 'text-gray-500 line-through' : ''}">{column.name}</span>
+					<div class="flex items-center gap-1">
 						<button
-							onclick={() => removeColumn(index)}
-							class="text-xs text-red-500 hover:text-red-700"
+							onclick={() => toggleColumnVisibility(index)}
+							class="text-xs {column.hidden ? 'text-gray-400 hover:text-gray-600' : 'text-blue-500 hover:text-blue-700'}"
+							title={column.hidden ? 'Show column' : 'Hide column'}
 						>
-							✕
+							{column.hidden ? '👁️' : '🙈'}
 						</button>
-					{/if}
+						{#if column.field !== '__raw__'}
+							<button
+								onclick={() => removeColumn(index)}
+								class="text-xs text-red-500 hover:text-red-700"
+								title="Remove column"
+							>
+								✕
+							</button>
+						{/if}
+					</div>
 				</div>
 			{/each}
 		</div>
@@ -179,7 +195,7 @@
 				<table class="w-full">
 					<thead class="bg-gray-50">
 						<tr>
-							{#each columns as column}
+							{#each columns.filter(col => !col.hidden) as column}
 								<th
 									class="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
 								>
@@ -207,7 +223,7 @@
 					<tbody class="divide-y divide-gray-200">
 						{#each parsedLogs as log}
 							<tr class="hover:bg-gray-50">
-								{#each columns as column}
+								{#each columns.filter(col => !col.hidden) as column}
 									{@const cellValue = getNestedValue(log, column.field)}
 									<td class="max-w-xs px-4 py-3 text-sm text-gray-900">
 										<div class="truncate" title={String(cellValue)}>
