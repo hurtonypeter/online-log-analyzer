@@ -9,6 +9,8 @@
 	let columns = $state([{ id: 'line', name: 'Raw Line', field: '__raw__', hidden: false }]);
 	let newFieldName = $state('');
 	let draggedColumn: number | null = null;
+	let selectedLog = $state<any>(null);
+	let sidebarOpen = $state(false);
 
 	const STORAGE_KEY = 'loganalyzer-columns';
 
@@ -60,7 +62,12 @@
 	function addColumn() {
 		if (newFieldName.trim()) {
 			const id = Date.now().toString();
-			const newColumn = { id, name: newFieldName.trim(), field: newFieldName.trim(), hidden: false };
+			const newColumn = {
+				id,
+				name: newFieldName.trim(),
+				field: newFieldName.trim(),
+				hidden: false
+			};
 
 			// Find the index of the raw line column
 			const rawLineIndex = columns.findIndex((col) => col.field === '__raw__');
@@ -146,6 +153,31 @@
 		draggedColumn = null;
 	}
 
+	function selectLog(log: any) {
+		selectedLog = log;
+		sidebarOpen = true;
+	}
+
+	function closeSidebar() {
+		sidebarOpen = false;
+		selectedLog = null;
+	}
+
+	async function copyToClipboard(text: string) {
+		try {
+			await navigator.clipboard.writeText(text);
+		} catch (error) {
+			console.warn('Failed to copy to clipboard:', error);
+			// Fallback for older browsers
+			const textArea = document.createElement('textarea');
+			textArea.value = text;
+			document.body.appendChild(textArea);
+			textArea.select();
+			document.execCommand('copy');
+			document.body.removeChild(textArea);
+		}
+	}
+
 	onMount(() => {
 		loadColumnsFromStorage();
 	});
@@ -159,148 +191,226 @@
 	});
 </script>
 
-<div class="container mx-auto p-6">
-	<h1 class="mb-6 text-3xl font-bold">Log Analyzer</h1>
+<div class="flex min-h-screen bg-gray-50">
+	<!-- Main Content -->
+	<div class="flex-1 transition-all duration-300 {sidebarOpen ? 'mr-96' : ''}">
+		<div class="container mx-auto p-6">
+			<h1 class="mb-6 text-3xl font-bold">Log Analyzer</h1>
 
-	<!-- Input Section -->
-	<div class="mb-6">
-		<label for="log-input" class="mb-2 block text-sm font-medium"
-			>Paste your logs here (one JSON object per line):</label
-		>
-		<textarea
-			id="log-input"
-			bind:value={logInput}
-			placeholder="Paste JSON logs here, one per line..."
-			class="h-32 w-full rounded-md border border-gray-300 p-3 font-mono text-sm focus:border-transparent focus:ring-2 focus:ring-blue-500"
-		></textarea>
-	</div>
+			<!-- Input Section -->
+			<div class="mb-6">
+				<label for="log-input" class="mb-2 block text-sm font-medium"
+					>Paste your logs here (one JSON object per line):</label
+				>
+				<textarea
+					id="log-input"
+					bind:value={logInput}
+					placeholder="Paste JSON logs here, one per line..."
+					class="h-32 w-full rounded-md border border-gray-300 p-3 font-mono text-sm focus:border-transparent focus:ring-2 focus:ring-blue-500"
+				></textarea>
+			</div>
 
-	<!-- Column Management -->
-	<div class="mb-6 rounded-lg bg-gray-50 p-4">
-		<div class="mb-3 flex items-center justify-between">
-			<h2 class="text-lg font-semibold">Manage Table Columns</h2>
-			<span class="text-xs text-gray-500">💾 Columns auto-saved to browser</span>
+			<!-- Column Management -->
+			<div class="mb-6 rounded-lg bg-gray-50 p-4">
+				<div class="mb-3 flex items-center justify-between">
+					<h2 class="text-lg font-semibold">Manage Table Columns</h2>
+					<span class="text-xs text-gray-500">💾 Columns auto-saved to browser</span>
+				</div>
+				<div class="mb-3 flex gap-2">
+					<input
+						type="text"
+						bind:value={newFieldName}
+						placeholder="Enter field name (e.g., nested.prop, array[0].field)"
+						class="flex-1 rounded-md border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
+						onkeydown={(e) => e.key === 'Enter' && addColumn()}
+					/>
+					<button
+						onclick={addColumn}
+						class="rounded-md bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700"
+					>
+						Add Column
+					</button>
+				</div>
+
+				<!-- Current Columns -->
+				<div class="flex flex-wrap gap-2">
+					{#each columns as column, index (column.id)}
+						<div
+							class="flex cursor-move items-center gap-2 rounded-lg border px-3 py-1 {column.hidden
+								? 'bg-gray-200 opacity-60'
+								: 'bg-white'}"
+							role="button"
+							tabindex="0"
+							draggable="true"
+							ondragstart={() => handleDragStart(index)}
+							ondragover={handleDragOver}
+							ondrop={(e) => handleDrop(e, index)}
+						>
+							<span class="text-sm {column.hidden ? 'text-gray-500 line-through' : ''}"
+								>{column.name}</span
+							>
+							<div class="flex items-center gap-1">
+								<button
+									onclick={() => toggleColumnVisibility(index)}
+									class="text-xs {column.hidden
+										? 'text-gray-400 hover:text-gray-600'
+										: 'text-blue-500 hover:text-blue-700'}"
+									title={column.hidden ? 'Show column' : 'Hide column'}
+								>
+									{column.hidden ? '👁️' : '🙈'}
+								</button>
+								{#if column.field !== '__raw__'}
+									<button
+										onclick={() => removeColumn(index)}
+										class="text-xs text-red-500 hover:text-red-700"
+										title="Remove column"
+									>
+										✕
+									</button>
+								{/if}
+							</div>
+						</div>
+					{/each}
+				</div>
+			</div>
+
+			<!-- Results Table -->
+			{#if parsedLogs.length > 0}
+				<div class="overflow-hidden rounded-lg border bg-white">
+					<div class="overflow-x-auto">
+						<table class="w-full">
+							<thead class="bg-gray-50">
+								<tr>
+									{#each columns.filter((col) => !col.hidden) as column}
+										<th
+											class="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
+										>
+											<div class="flex items-center gap-2">
+												<span>{column.name}</span>
+												<div class="flex flex-col">
+													<button
+														onclick={() => sortColumn(column.field, true)}
+														class="text-xs text-gray-400 hover:text-gray-600"
+													>
+														▲
+													</button>
+													<button
+														onclick={() => sortColumn(column.field, false)}
+														class="text-xs text-gray-400 hover:text-gray-600"
+													>
+														▼
+													</button>
+												</div>
+											</div>
+										</th>
+									{/each}
+								</tr>
+							</thead>
+							<tbody class="divide-y divide-gray-200">
+								{#each parsedLogs as log}
+									<tr
+										class="cursor-pointer transition-colors hover:bg-gray-50"
+										onclick={() => selectLog(log)}
+										onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && selectLog(log)}
+										role="button"
+										tabindex="0"
+										aria-label="View log details"
+									>
+										{#each columns.filter((col) => !col.hidden) as column}
+											{@const cellValue = getNestedValue(log, column.field)}
+											<td class="max-w-xs px-4 py-3 text-sm text-gray-900">
+												<div class="truncate" title={String(cellValue)}>
+													{#if column.field === '__raw__'}
+														<code class="rounded bg-gray-100 px-1 py-0.5 text-xs">{cellValue}</code>
+													{:else if typeof cellValue === 'object' && cellValue !== null}
+														<code class="rounded bg-blue-50 px-1 py-0.5 text-xs text-blue-800"
+															>{JSON.stringify(cellValue)}</code
+														>
+													{:else}
+														{cellValue}
+													{/if}
+												</div>
+											</td>
+										{/each}
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+				</div>
+
+				<div class="mt-4 text-sm text-gray-600">
+					Showing {parsedLogs.length} parsed log entries
+				</div>
+			{:else if logInput.trim()}
+				<div class="py-8 text-center text-gray-500">
+					No valid JSON objects found in the input. Make sure each line contains a valid JSON
+					object.
+				</div>
+			{:else}
+				<div class="py-8 text-center text-gray-500">
+					Enter some log data above to see the parsed results here.
+				</div>
+			{/if}
 		</div>
-		<div class="mb-3 flex gap-2">
-			<input
-				type="text"
-				bind:value={newFieldName}
-				placeholder="Enter field name (e.g., nested.prop, array[0].field)"
-				class="flex-1 rounded-md border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
-				onkeydown={(e) => e.key === 'Enter' && addColumn()}
-			/>
+	</div>
+</div>
+
+<!-- Sidebar -->
+{#if sidebarOpen && selectedLog}
+	<div
+		class="fixed top-0 right-0 z-10 h-full w-96 overflow-y-auto border-l border-gray-200 bg-white shadow-xl"
+	>
+		<!-- Sidebar Header -->
+		<div
+			class="sticky top-0 flex items-center justify-between border-b border-gray-200 bg-white px-6 py-4"
+		>
+			<h2 class="text-lg font-semibold text-gray-900">Log Details</h2>
 			<button
-				onclick={addColumn}
-				class="rounded-md bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700"
+				onclick={closeSidebar}
+				class="cursor-pointer text-gray-400 transition-colors hover:text-gray-600"
 			>
-				Add Column
+				✕
 			</button>
 		</div>
 
-		<!-- Current Columns -->
-		<div class="flex flex-wrap gap-2">
-			{#each columns as column, index (column.id)}
-				<div
-					class="flex cursor-move items-center gap-2 rounded-lg border px-3 py-1 {column.hidden ? 'bg-gray-200 opacity-60' : 'bg-white'}"
-					role="button"
-					tabindex="0"
-					draggable="true"
-					ondragstart={() => handleDragStart(index)}
-					ondragover={handleDragOver}
-					ondrop={(e) => handleDrop(e, index)}
-				>
-					<span class="text-sm {column.hidden ? 'text-gray-500 line-through' : ''}">{column.name}</span>
-					<div class="flex items-center gap-1">
-						<button
-							onclick={() => toggleColumnVisibility(index)}
-							class="text-xs {column.hidden ? 'text-gray-400 hover:text-gray-600' : 'text-blue-500 hover:text-blue-700'}"
-							title={column.hidden ? 'Show column' : 'Hide column'}
-						>
-							{column.hidden ? '👁️' : '🙈'}
-						</button>
-						{#if column.field !== '__raw__'}
+		<!-- Sidebar Content -->
+		<div class="p-6">
+			<div class="space-y-4">
+				{#each columns as column}
+					{@const value = getNestedValue(selectedLog, column.field)}
+					<div class="border-b border-gray-100 pb-3">
+						<div class="mb-1 flex items-center justify-between">
+							<span class="text-sm font-medium text-gray-600">{column.name}</span>
 							<button
-								onclick={() => removeColumn(index)}
-								class="text-xs text-red-500 hover:text-red-700"
-								title="Remove column"
+								onclick={() => copyToClipboard(String(value))}
+								class="rounded p-1 text-gray-400 transition-colors hover:text-gray-600"
+								title="Copy to clipboard"
 							>
-								✕
+								📋
 							</button>
-						{/if}
-					</div>
-				</div>
-			{/each}
-		</div>
-	</div>
-
-	<!-- Results Table -->
-	{#if parsedLogs.length > 0}
-		<div class="overflow-hidden rounded-lg border bg-white">
-			<div class="overflow-x-auto">
-				<table class="w-full">
-					<thead class="bg-gray-50">
-						<tr>
-							{#each columns.filter(col => !col.hidden) as column}
-								<th
-									class="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
+						</div>
+						<div class="text-sm break-all text-gray-900">
+							{#if column.field === '__raw__'}
+								<pre
+									class="overflow-x-auto rounded bg-gray-50 p-3 text-xs whitespace-pre-wrap">{JSON.stringify(
+										JSON.parse(value),
+										null,
+										2
+									)}</pre>
+							{:else if typeof value === 'object' && value !== null}
+								<code class="rounded bg-blue-50 px-2 py-1 text-blue-800"
+									>{JSON.stringify(value)}</code
 								>
-									<div class="flex items-center gap-2">
-										<span>{column.name}</span>
-										<div class="flex flex-col">
-											<button
-												onclick={() => sortColumn(column.field, true)}
-												class="text-xs text-gray-400 hover:text-gray-600"
-											>
-												▲
-											</button>
-											<button
-												onclick={() => sortColumn(column.field, false)}
-												class="text-xs text-gray-400 hover:text-gray-600"
-											>
-												▼
-											</button>
-										</div>
-									</div>
-								</th>
-							{/each}
-						</tr>
-					</thead>
-					<tbody class="divide-y divide-gray-200">
-						{#each parsedLogs as log}
-							<tr class="hover:bg-gray-50">
-								{#each columns.filter(col => !col.hidden) as column}
-									{@const cellValue = getNestedValue(log, column.field)}
-									<td class="max-w-xs px-4 py-3 text-sm text-gray-900">
-										<div class="truncate" title={String(cellValue)}>
-											{#if column.field === '__raw__'}
-												<code class="rounded bg-gray-100 px-1 py-0.5 text-xs">{cellValue}</code>
-											{:else if typeof cellValue === 'object' && cellValue !== null}
-												<code class="rounded bg-blue-50 px-1 py-0.5 text-xs text-blue-800"
-													>{JSON.stringify(cellValue)}</code
-												>
-											{:else}
-												{cellValue}
-											{/if}
-										</div>
-									</td>
-								{/each}
-							</tr>
-						{/each}
-					</tbody>
-				</table>
+							{:else if value === ''}
+								<span class="text-gray-400 italic">empty</span>
+							{:else}
+								<span>{value}</span>
+							{/if}
+						</div>
+					</div>
+				{/each}
 			</div>
 		</div>
-
-		<div class="mt-4 text-sm text-gray-600">
-			Showing {parsedLogs.length} parsed log entries
-		</div>
-	{:else if logInput.trim()}
-		<div class="py-8 text-center text-gray-500">
-			No valid JSON objects found in the input. Make sure each line contains a valid JSON object.
-		</div>
-	{:else}
-		<div class="py-8 text-center text-gray-500">
-			Enter some log data above to see the parsed results here.
-		</div>
-	{/if}
-</div>
+	</div>
+{/if}
