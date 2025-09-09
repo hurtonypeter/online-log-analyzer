@@ -20,13 +20,15 @@ export type FilterOperator =
 	| '<='
 	| 'contains'
 	| 'startswith'
-	| 'endswith';
+	| 'endswith'
+	| 'exists';
 
 export class FilterParser {
 	private static readonly OPERATORS: FilterOperator[] = [
 		'contains',
 		'startswith',
-		'endswith', // Function-style operators first (longer matches)
+		'endswith',
+		'exists', // Function-style operators first (longer matches)
 		'!=',
 		'>=',
 		'<=',
@@ -121,6 +123,8 @@ export class FilterParser {
 				return String(fieldValue).toLowerCase().startsWith(String(filter.value).toLowerCase());
 			case 'endswith':
 				return String(fieldValue).toLowerCase().endsWith(String(filter.value).toLowerCase());
+			case 'exists':
+				return !!fieldValue;
 			default:
 				return false;
 		}

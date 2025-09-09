@@ -92,6 +92,7 @@
 					<li><code>field contains('text')</code> - Contains substring</li>
 					<li><code>field startswith('text')</code> - Starts with</li>
 					<li><code>field endswith('text')</code> - Ends with</li>
+					<li><code>field exists()</code> - Field is present and truthy</li>
 				</ul>
 				<div class="mt-3">
 					<strong>Examples:</strong>
@@ -101,6 +102,7 @@
 					<li><code>array[0].prop &gt; 10</code> - Array element</li>
 					<li><code>level = 'error'</code> - Simple field</li>
 					<li><code>message contains('failed')</code> - Text search</li>
+					<li><code>user exists()</code> - Check if user field is present</li>
 				</ul>
 			</div>
 		</div>
