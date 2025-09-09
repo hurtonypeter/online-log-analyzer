@@ -1,4 +1,7 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
+
 	let logInput = $state(
 		'{"foo":{"bar":1}, "baz": 3, "zip": 32, "array": [{"meh": 49}, {"meh": 50}]}\n{"foo":{"bar":2}, "baz": 4}'
 	);
@@ -6,6 +9,37 @@
 	let columns = $state([{ id: 'line', name: 'Raw Line', field: '__raw__', hidden: false }]);
 	let newFieldName = $state('');
 	let draggedColumn: number | null = null;
+
+	const STORAGE_KEY = 'loganalyzer-columns';
+
+	function saveColumnsToStorage() {
+		if (browser) {
+			try {
+				localStorage.setItem(STORAGE_KEY, JSON.stringify(columns));
+			} catch (error) {
+				console.warn('Failed to save columns to localStorage:', error);
+			}
+		}
+	}
+
+	function loadColumnsFromStorage() {
+		if (browser) {
+			try {
+				const saved = localStorage.getItem(STORAGE_KEY);
+				if (saved) {
+					const parsedColumns = JSON.parse(saved);
+					// Ensure we always have the default Raw Line column
+					const hasRawLine = parsedColumns.some((col: any) => col.field === '__raw__');
+					if (!hasRawLine) {
+						parsedColumns.push({ id: 'line', name: 'Raw Line', field: '__raw__', hidden: false });
+					}
+					columns = parsedColumns;
+				}
+			} catch (error) {
+				console.warn('Failed to load columns from localStorage:', error);
+			}
+		}
+	}
 
 	function parseLogLines(input: string) {
 		const lines = input.split('\n').filter((line) => line.trim());
@@ -112,8 +146,16 @@
 		draggedColumn = null;
 	}
 
+	onMount(() => {
+		loadColumnsFromStorage();
+	});
+
 	$effect(() => {
 		parseLogLines(logInput);
+	});
+
+	$effect(() => {
+		saveColumnsToStorage();
 	});
 </script>
 
@@ -135,7 +177,10 @@
 
 	<!-- Column Management -->
 	<div class="mb-6 rounded-lg bg-gray-50 p-4">
-		<h2 class="mb-3 text-lg font-semibold">Manage Table Columns</h2>
+		<div class="mb-3 flex items-center justify-between">
+			<h2 class="text-lg font-semibold">Manage Table Columns</h2>
+			<span class="text-xs text-gray-500">💾 Columns auto-saved to browser</span>
+		</div>
 		<div class="mb-3 flex gap-2">
 			<input
 				type="text"
