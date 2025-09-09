@@ -354,7 +354,6 @@
 			<div class="mb-6 rounded-lg bg-gray-50">
 				<div class="mb-3 flex items-center justify-between">
 					<h2 class="text-lg font-semibold">Manage Table Columns</h2>
-					<span class="text-xs text-gray-500">💾 Columns auto-saved to browser</span>
 				</div>
 				<div class="mb-3 flex gap-2">
 					<input
@@ -419,7 +418,6 @@
 				<div class="mb-3 flex items-center justify-between">
 					<h2 class="text-lg font-semibold">Filter Logs</h2>
 					<div class="flex items-center gap-2">
-						<span class="text-xs text-gray-500">💾 Filters auto-saved to browser</span>
 						<button
 							onclick={addFilterExpression}
 							class="rounded-md bg-green-600 px-3 py-1 text-sm text-white transition-colors hover:bg-green-700"
