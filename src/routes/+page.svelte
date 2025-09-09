@@ -1,13 +1,12 @@
 <script lang="ts">
-
-	let logInput = $state('');
+	let logInput = $state('{"foo":{"bar":1}}\n{"foo":{"bar":2}}');
 	let parsedLogs = $state<any[]>([]);
 	let columns = $state([{ id: 'line', name: 'Raw Line', field: '__raw__' }]);
 	let newFieldName = $state('');
 	let draggedColumn: number | null = null;
 
 	function parseLogLines(input: string) {
-		const lines = input.split('\n').filter(line => line.trim());
+		const lines = input.split('\n').filter((line) => line.trim());
 		const logs: any[] = [];
 
 		for (const line of lines) {
@@ -25,7 +24,7 @@
 	function addColumn() {
 		if (newFieldName.trim()) {
 			const id = Date.now().toString();
-			columns = [...columns, { id, name: newFieldName.trim(), field: newFieldName.trim() }];
+			columns = [{ id, name: newFieldName.trim(), field: newFieldName.trim() }, ...columns];
 			newFieldName = '';
 		}
 	}
@@ -36,16 +35,44 @@
 		}
 	}
 
+	function getNestedValue(obj: any, path: string): any {
+		if (path === '__raw__') return obj.__raw__;
+
+		// Handle array indexing like "array[0].prop" or "array[0]"
+		const parts = path.split('.');
+		let current = obj;
+
+		for (const part of parts) {
+			if (current == null) return '';
+
+			// Check if this part has array indexing
+			const arrayMatch = part.match(/^(.+?)\[(\d+)\]$/);
+			if (arrayMatch) {
+				const [, arrayName, index] = arrayMatch;
+				current = current[arrayName];
+				if (Array.isArray(current) && parseInt(index) < current.length) {
+					current = current[parseInt(index)];
+				} else {
+					return '';
+				}
+			} else {
+				current = current[part];
+			}
+		}
+
+		return current ?? '';
+	}
+
 	function sortColumn(columnField: string, ascending = true) {
 		parsedLogs = [...parsedLogs].sort((a, b) => {
-			const aVal = a[columnField] ?? '';
-			const bVal = b[columnField] ?? '';
-			
+			const aVal = getNestedValue(a, columnField);
+			const bVal = getNestedValue(b, columnField);
+
 			if (typeof aVal === 'string' && typeof bVal === 'string') {
 				return ascending ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
 			}
-			
-			return ascending ? (aVal > bVal ? 1 : -1) : (bVal > aVal ? 1 : -1);
+
+			return ascending ? (aVal > bVal ? 1 : -1) : bVal > aVal ? 1 : -1;
 		});
 	}
 
@@ -74,43 +101,45 @@
 </script>
 
 <div class="container mx-auto p-6">
-	<h1 class="text-3xl font-bold mb-6">Log Analyzer</h1>
-	
+	<h1 class="mb-6 text-3xl font-bold">Log Analyzer</h1>
+
 	<!-- Input Section -->
 	<div class="mb-6">
-		<label for="log-input" class="block text-sm font-medium mb-2">Paste your logs here (one JSON object per line):</label>
+		<label for="log-input" class="mb-2 block text-sm font-medium"
+			>Paste your logs here (one JSON object per line):</label
+		>
 		<textarea
 			id="log-input"
 			bind:value={logInput}
 			placeholder="Paste JSON logs here, one per line..."
-			class="w-full h-32 p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+			class="h-32 w-full rounded-md border border-gray-300 p-3 font-mono text-sm focus:border-transparent focus:ring-2 focus:ring-blue-500"
 		></textarea>
 	</div>
 
 	<!-- Column Management -->
-	<div class="mb-6 bg-gray-50 p-4 rounded-lg">
-		<h2 class="text-lg font-semibold mb-3">Manage Table Columns</h2>
-		<div class="flex gap-2 mb-3">
+	<div class="mb-6 rounded-lg bg-gray-50 p-4">
+		<h2 class="mb-3 text-lg font-semibold">Manage Table Columns</h2>
+		<div class="mb-3 flex gap-2">
 			<input
 				type="text"
 				bind:value={newFieldName}
-				placeholder="Enter field name to add as column"
-				class="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+				placeholder="Enter field name (e.g., nested.prop, array[0].field)"
+				class="flex-1 rounded-md border border-gray-300 px-3 py-2 focus:border-transparent focus:ring-2 focus:ring-blue-500"
 				onkeydown={(e) => e.key === 'Enter' && addColumn()}
 			/>
 			<button
 				onclick={addColumn}
-				class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+				class="rounded-md bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700"
 			>
 				Add Column
 			</button>
 		</div>
-		
+
 		<!-- Current Columns -->
 		<div class="flex flex-wrap gap-2">
 			{#each columns as column, index (column.id)}
 				<div
-					class="flex items-center gap-2 px-3 py-1 bg-white border rounded-lg cursor-move"
+					class="flex cursor-move items-center gap-2 rounded-lg border bg-white px-3 py-1"
 					role="button"
 					tabindex="0"
 					draggable="true"
@@ -122,7 +151,7 @@
 					{#if column.field !== '__raw__'}
 						<button
 							onclick={() => removeColumn(index)}
-							class="text-red-500 hover:text-red-700 text-xs"
+							class="text-xs text-red-500 hover:text-red-700"
 						>
 							✕
 						</button>
@@ -134,25 +163,27 @@
 
 	<!-- Results Table -->
 	{#if parsedLogs.length > 0}
-		<div class="bg-white rounded-lg border overflow-hidden">
+		<div class="overflow-hidden rounded-lg border bg-white">
 			<div class="overflow-x-auto">
 				<table class="w-full">
 					<thead class="bg-gray-50">
 						<tr>
 							{#each columns as column}
-								<th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+								<th
+									class="px-4 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase"
+								>
 									<div class="flex items-center gap-2">
 										<span>{column.name}</span>
 										<div class="flex flex-col">
 											<button
 												onclick={() => sortColumn(column.field, true)}
-												class="text-gray-400 hover:text-gray-600 text-xs"
+												class="text-xs text-gray-400 hover:text-gray-600"
 											>
 												▲
 											</button>
 											<button
 												onclick={() => sortColumn(column.field, false)}
-												class="text-gray-400 hover:text-gray-600 text-xs"
+												class="text-xs text-gray-400 hover:text-gray-600"
 											>
 												▼
 											</button>
@@ -166,12 +197,17 @@
 						{#each parsedLogs as log}
 							<tr class="hover:bg-gray-50">
 								{#each columns as column}
-									<td class="px-4 py-3 text-sm text-gray-900 max-w-xs">
-										<div class="truncate" title={String(log[column.field] ?? '')}>
+									{@const cellValue = getNestedValue(log, column.field)}
+									<td class="max-w-xs px-4 py-3 text-sm text-gray-900">
+										<div class="truncate" title={String(cellValue)}>
 											{#if column.field === '__raw__'}
-												<code class="text-xs bg-gray-100 px-1 py-0.5 rounded">{log[column.field]}</code>
+												<code class="rounded bg-gray-100 px-1 py-0.5 text-xs">{cellValue}</code>
+											{:else if typeof cellValue === 'object' && cellValue !== null}
+												<code class="rounded bg-blue-50 px-1 py-0.5 text-xs text-blue-800"
+													>{JSON.stringify(cellValue)}</code
+												>
 											{:else}
-												{log[column.field] ?? ''}
+												{cellValue}
 											{/if}
 										</div>
 									</td>
@@ -182,16 +218,16 @@
 				</table>
 			</div>
 		</div>
-		
+
 		<div class="mt-4 text-sm text-gray-600">
 			Showing {parsedLogs.length} parsed log entries
 		</div>
 	{:else if logInput.trim()}
-		<div class="text-gray-500 text-center py-8">
+		<div class="py-8 text-center text-gray-500">
 			No valid JSON objects found in the input. Make sure each line contains a valid JSON object.
 		</div>
 	{:else}
-		<div class="text-gray-500 text-center py-8">
+		<div class="py-8 text-center text-gray-500">
 			Enter some log data above to see the parsed results here.
 		</div>
 	{/if}
