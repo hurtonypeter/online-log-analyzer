@@ -24,7 +24,16 @@
 	function addColumn() {
 		if (newFieldName.trim()) {
 			const id = Date.now().toString();
-			columns = [{ id, name: newFieldName.trim(), field: newFieldName.trim() }, ...columns];
+			const newColumn = { id, name: newFieldName.trim(), field: newFieldName.trim() };
+			
+			// Find the index of the raw line column
+			const rawLineIndex = columns.findIndex(col => col.field === '__raw__');
+			
+			// Insert new column before the raw line column
+			const newColumns = [...columns];
+			newColumns.splice(rawLineIndex, 0, newColumn);
+			columns = newColumns;
+			
 			newFieldName = '';
 		}
 	}
