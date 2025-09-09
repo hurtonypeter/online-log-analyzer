@@ -3,7 +3,7 @@
 	import { browser } from '$app/environment';
 
 	let logInput = $state(
-		'{"foo":{"bar":1}, "baz": 3, "zip": 32, "array": [{"meh": 49}, {"meh": 50}]}\n{"foo":{"bar":2}, "baz": 4}'
+		'{"foo":{"bar":1}, "baz": 3, "zip": 32, "array": [{"meh": 49}, {"meh": 50}]}\n{"foo":{"bar":2}, "baz": 4}\n{"foo":{"bar":3}, "baz": 5}\n{"foo":{"bar":4}, "baz": 6}'
 	);
 	let parsedLogs = $state<any[]>([]);
 	let columns = $state([{ id: 'line', name: 'Raw Line', field: '__raw__', hidden: false }]);
@@ -309,7 +309,9 @@
 							<tbody class="divide-y divide-gray-200">
 								{#each parsedLogs as log}
 									<tr
-										class="cursor-pointer transition-colors hover:bg-gray-50"
+										class="cursor-pointer transition-colors hover:bg-gray-50 {selectedLog === log
+											? 'border-r-4 border-l-4 border-blue-500 bg-blue-50'
+											: ''}"
 										onclick={() => selectLog(log)}
 										onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && selectLog(log)}
 										role="button"
@@ -318,7 +320,11 @@
 									>
 										{#each columns.filter((col) => !col.hidden) as column}
 											{@const cellValue = getNestedValue(log, column.field)}
-											<td class="max-w-xs px-4 py-3 text-sm text-gray-900">
+											<td
+												class="max-w-xs px-4 py-3 text-sm text-gray-900 {selectedLog === log
+													? 'border-t-1 border-blue-500 '
+													: ''}"
+											>
 												<div class="truncate" title={String(cellValue)}>
 													{#if column.field === '__raw__'}
 														<code class="rounded bg-gray-100 px-1 py-0.5 text-xs">{cellValue}</code>
