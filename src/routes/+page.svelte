@@ -1,5 +1,7 @@
 <script lang="ts">
-	let logInput = $state('{"foo":{"bar":1}}\n{"foo":{"bar":2}}');
+	let logInput = $state(
+		'{"foo":{"bar":1}, "baz": 3, "zip": 32, "array": [{"meh": 49}, {"meh": 50}]}\n{"foo":{"bar":2}, "baz": 4}'
+	);
 	let parsedLogs = $state<any[]>([]);
 	let columns = $state([{ id: 'line', name: 'Raw Line', field: '__raw__' }]);
 	let newFieldName = $state('');
@@ -25,15 +27,15 @@
 		if (newFieldName.trim()) {
 			const id = Date.now().toString();
 			const newColumn = { id, name: newFieldName.trim(), field: newFieldName.trim() };
-			
+
 			// Find the index of the raw line column
-			const rawLineIndex = columns.findIndex(col => col.field === '__raw__');
-			
+			const rawLineIndex = columns.findIndex((col) => col.field === '__raw__');
+
 			// Insert new column before the raw line column
 			const newColumns = [...columns];
 			newColumns.splice(rawLineIndex, 0, newColumn);
 			columns = newColumns;
-			
+
 			newFieldName = '';
 		}
 	}
