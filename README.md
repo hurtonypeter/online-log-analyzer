@@ -16,12 +16,14 @@ A powerful single-page application for analyzing JSON log files with dynamic col
 ## 📖 Usage Examples
 
 ### Sample JSON Logs
+
 ```json
 {"user": {"name": "Alice", "age": 30}, "items": [{"id": 1}, {"id": 2}]}
 {"user": {"name": "Bob", "age": 25}, "items": [{"id": 3}]}
 ```
 
 ### Field Path Examples
+
 - `user.name` → "Alice", "Bob"
 - `user.age` → 30, 25
 - `items[0].id` → 1, 3
@@ -39,18 +41,21 @@ pnpm run dev
 This project is configured for automatic deployment to GitHub Pages:
 
 ### Setup
+
 1. Push your code to a GitHub repository
 2. Go to Settings > Pages in your repository
 3. Set Source to "GitHub Actions"
 4. The workflow will automatically deploy on pushes to `main`
 
 ### Manual Build
+
 ```bash
 pnpm run build:gh-pages
 pnpm run preview
 ```
 
 ### Configuration
+
 - Repository name should match the `base` path in `svelte.config.js`
 - Currently configured for repository name: `loganalyzer`
 - Update `paths.base` if your repository has a different name

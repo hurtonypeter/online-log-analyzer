@@ -1,19 +1,27 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
+	import FilterExpression from '$lib/FilterExpression.svelte';
+	import {
+		FilterParser,
+		type FilterExpression as FilterExpressionType
+	} from '$lib/filterParser.js';
 
 	let logInput = $state('');
 	let parsedLogs = $state<any[]>([]);
+	let filteredLogs = $state<any[]>([]);
 	let columns = $state([{ id: 'line', name: 'Raw Line', field: '__raw__', hidden: false }]);
 	let newFieldName = $state('');
 	let draggedColumn: number | null = null;
 	let selectedLog = $state<any>(null);
 	let sidebarOpen = $state(false);
 	let sortState = $state<{ column: string; direction: 'asc' | 'desc' } | null>(null);
+	let filterExpressions = $state<FilterExpressionType[]>([]);
 
 	const STORAGE_KEY = 'loganalyzer-columns';
 	const SORT_STORAGE_KEY = 'loganalyzer-sort';
 	const INPUT_STORAGE_KEY = 'loganalyzer-input';
+	const FILTERS_STORAGE_KEY = 'loganalyzer-filters';
 
 	function saveColumnsToStorage() {
 		if (browser) {
@@ -77,6 +85,29 @@
 		}
 	}
 
+	function saveFiltersToStorage() {
+		if (browser) {
+			try {
+				localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(filterExpressions));
+			} catch (error) {
+				console.warn('Failed to save filters to localStorage:', error);
+			}
+		}
+	}
+
+	function loadFiltersFromStorage() {
+		if (browser) {
+			try {
+				const saved = localStorage.getItem(FILTERS_STORAGE_KEY);
+				if (saved) {
+					filterExpressions = JSON.parse(saved);
+				}
+			} catch (error) {
+				console.warn('Failed to load filters from localStorage:', error);
+			}
+		}
+	}
+
 	function loadInputFromStorage() {
 		if (browser) {
 			try {
@@ -107,11 +138,19 @@
 			}
 		}
 
-		// Apply saved sorting if it exists
+		parsedLogs = logs;
+		updateFilteredLogs();
+	}
+
+	function updateFilteredLogs() {
+		// Apply filters first
+		const filtered = FilterParser.applyFilters(parsedLogs, filterExpressions);
+
+		// Apply sorting if it exists
 		if (sortState) {
-			parsedLogs = applySorting(logs, sortState.column, sortState.direction);
+			filteredLogs = applySorting(filtered, sortState.column, sortState.direction);
 		} else {
-			parsedLogs = logs;
+			filteredLogs = filtered;
 		}
 	}
 
@@ -192,7 +231,7 @@
 
 	function sortColumn(columnField: string, direction: 'asc' | 'desc') {
 		sortState = { column: columnField, direction };
-		parsedLogs = applySorting(parsedLogs, columnField, direction);
+		updateFilteredLogs();
 		saveSortToStorage();
 	}
 
@@ -240,22 +279,54 @@
 		}
 	}
 
+	function addFilterExpression() {
+		const newFilter: FilterExpressionType = {
+			id: Date.now().toString(),
+			expression: '',
+			enabled: true
+		};
+		filterExpressions = [...filterExpressions, newFilter];
+	}
+
+	function updateFilterExpression(updatedFilter: FilterExpressionType) {
+		const index = filterExpressions.findIndex((f) => f.id === updatedFilter.id);
+		if (index !== -1) {
+			filterExpressions[index] = updatedFilter;
+			updateFilteredLogs();
+		}
+	}
+
+	function deleteFilterExpression(filterId: string) {
+		filterExpressions = filterExpressions.filter((f) => f.id !== filterId);
+		updateFilteredLogs();
+	}
+
 	onMount(() => {
 		loadInputFromStorage();
 		loadColumnsFromStorage();
 		loadSortFromStorage();
-	});
+		loadFiltersFromStorage();
 
-	$effect(() => {
 		parseLogLines(logInput);
 	});
 
+	// $effect(() => {
+	// 	parseLogLines(logInput);
+	// });
+
 	$effect(() => {
+		columns;
 		saveColumnsToStorage();
 	});
 
 	$effect(() => {
+		logInput;
 		saveInputToStorage();
+	});
+
+	$effect(() => {
+		filterExpressions;
+		saveFiltersToStorage();
 	});
 </script>
 
@@ -273,6 +344,7 @@
 				<textarea
 					id="log-input"
 					bind:value={logInput}
+					oninput={() => parseLogLines(logInput)}
 					placeholder="Paste JSON logs here, one per line..."
 					class="h-32 w-full rounded-md border border-gray-300 p-3 font-mono text-sm focus:border-transparent focus:ring-2 focus:ring-blue-500"
 				></textarea>
@@ -342,8 +414,41 @@
 				</div>
 			</div>
 
+			<!-- Filter Section -->
+			<div class="mb-6 rounded-lg border border-gray-200 bg-white p-4">
+				<div class="mb-3 flex items-center justify-between">
+					<h2 class="text-lg font-semibold">Filter Logs</h2>
+					<div class="flex items-center gap-2">
+						<span class="text-xs text-gray-500">💾 Filters auto-saved to browser</span>
+						<button
+							onclick={addFilterExpression}
+							class="rounded-md bg-green-600 px-3 py-1 text-sm text-white transition-colors hover:bg-green-700"
+						>
+							+ Add Filter
+						</button>
+					</div>
+				</div>
+
+				{#if filterExpressions.length === 0}
+					<div class="py-4 text-center text-gray-500">
+						<p class="text-sm">No filters yet. Click "Add Filter" to start filtering your logs.</p>
+						<p class="mt-1 text-xs">Multiple filters will be combined with AND logic.</p>
+					</div>
+				{:else}
+					<div class="space-y-2">
+						{#each filterExpressions as filter (filter.id)}
+							<FilterExpression
+								{filter}
+								onUpdate={updateFilterExpression}
+								onDelete={deleteFilterExpression}
+							/>
+						{/each}
+					</div>
+				{/if}
+			</div>
+
 			<!-- Results Table -->
-			{#if parsedLogs.length > 0}
+			{#if filteredLogs.length > 0}
 				<div class="overflow-hidden rounded-lg border bg-white">
 					<div class="overflow-x-auto">
 						<table class="w-full">
@@ -390,7 +495,7 @@
 								</tr>
 							</thead>
 							<tbody class="divide-y divide-gray-200">
-								{#each parsedLogs as log}
+								{#each filteredLogs as log}
 									<tr
 										class="cursor-pointer transition-colors hover:bg-gray-50 {selectedLog === log
 											? 'border-r-4 border-l-4 border-blue-500 bg-blue-50'
@@ -429,7 +534,14 @@
 				</div>
 
 				<div class="mt-4 text-sm text-gray-600">
-					Showing {parsedLogs.length} parsed log entries
+					Showing {filteredLogs.length} of {parsedLogs.length} log entries
+					{#if filterExpressions.some((f) => f.enabled)}
+						(filtered)
+					{/if}
+				</div>
+			{:else if parsedLogs.length > 0}
+				<div class="py-8 text-center text-gray-500">
+					All log entries have been filtered out. Try adjusting your filter expressions.
 				</div>
 			{:else if logInput.trim()}
 				<div class="py-8 text-center text-gray-500">
