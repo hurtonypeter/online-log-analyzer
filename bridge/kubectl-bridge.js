@@ -1,6 +1,3 @@
-// kubectl-bridge.js - Local bridge server for kubectl commands
-// Run this server locally to enable kubectl access from the web app
-
 const express = require('express');
 const cors = require('cors');
 const { WebSocketServer } = require('ws');
@@ -19,11 +16,55 @@ app.get('/health', (req, res) => {
 	res.json({ status: 'ok', version: '1.0.0' });
 });
 
+// Get namespaces
+app.get('/namespaces', async (req, res) => {
+	const context = req.query.context;
+
+	// Validate required context parameter
+	if (!context) {
+		return res.status(400).json({ error: 'Context parameter is required' });
+	}
+
+	// Build kubectl command with context
+	const sanitizedContext = context.replace(/[^a-zA-Z0-9_\-\.@]/g, '');
+	const cmd = `kubectl get namespaces --context ${sanitizedContext} -o json`;
+
+	exec(cmd, (error, stdout, stderr) => {
+		if (error) {
+			console.error(`Error fetching namespaces: ${error}`);
+			return res.status(500).json({ error: 'Failed to fetch namespaces', details: stderr });
+		}
+
+		try {
+			const nsData = JSON.parse(stdout);
+			const namespaces = nsData.items.map((ns) => ns.metadata.name);
+			res.json(namespaces);
+		} catch (parseError) {
+			console.error('Error parsing namespace data:', parseError);
+			res.status(500).json({ error: 'Failed to parse namespace data' });
+		}
+	});
+});
+
 // Get pods in a namespace
 app.get('/pods', async (req, res) => {
-	const namespace = req.query.namespace || 'default';
+	const namespace = req.query.namespace;
+	const context = req.query.context;
 
-	exec(`kubectl get pods -n ${namespace} -o json`, (error, stdout, stderr) => {
+	// Validate required context parameter
+	if (!context) {
+		return res.status(400).json({ error: 'Context parameter is required' });
+	}
+	// Validate required namespace parameter
+	if (!namespace) {
+		return res.status(400).json({ error: 'Namespace parameter is required' });
+	}
+
+	// Build kubectl command with context
+	const sanitizedContext = context.replace(/[^a-zA-Z0-9_\-\.@]/g, '');
+	const cmd = `kubectl get pods -n ${namespace} --context ${sanitizedContext} -o json`;
+
+	exec(cmd, (error, stdout, stderr) => {
 		if (error) {
 			console.error(`Error fetching pods: ${error}`);
 			return res.status(500).json({ error: 'Failed to fetch pods', details: stderr });
@@ -47,21 +88,124 @@ app.get('/pods', async (req, res) => {
 	});
 });
 
-// Get namespaces
-app.get('/namespaces', async (req, res) => {
-	exec('kubectl get namespaces -o json', (error, stdout, stderr) => {
+// Get pod details
+app.get('/pods/:name', (req, res) => {
+	const { name } = req.params;
+	const context = req.query.context;
+	const namespace = req.query.namespace;
+
+	// Validate required context parameter
+	if (!context) {
+		return res.status(400).json({ error: 'Context parameter is required' });
+	}
+	// Validate required namespace parameter
+	if (!namespace) {
+		return res.status(400).json({ error: 'Namespace parameter is required' });
+	}
+
+	// Build kubectl command with context
+	const sanitizedContext = context.replace(/[^a-zA-Z0-9_\-\.@]/g, '');
+	const cmd = `kubectl get pod ${name} -n ${namespace} --context ${sanitizedContext} -o json`;
+
+	exec(cmd, (error, stdout, stderr) => {
 		if (error) {
-			console.error(`Error fetching namespaces: ${error}`);
-			return res.status(500).json({ error: 'Failed to fetch namespaces', details: stderr });
+			return res.status(500).json({ error: 'Failed to fetch pod details', details: stderr });
 		}
 
 		try {
-			const nsData = JSON.parse(stdout);
-			const namespaces = nsData.items.map((ns) => ns.metadata.name);
-			res.json(namespaces);
+			const podData = JSON.parse(stdout);
+			res.json(podData);
 		} catch (parseError) {
-			console.error('Error parsing namespace data:', parseError);
-			res.status(500).json({ error: 'Failed to parse namespace data' });
+			res.status(500).json({ error: 'Failed to parse pod data' });
+		}
+	});
+});
+
+// Get recent pod events
+app.get('/events/:name', (req, res) => {
+	const { name } = req.params;
+	const context = req.query.context;
+	const namespace = req.query.namespace;
+
+	// Validate required context parameter
+	if (!context) {
+		return res.status(400).json({ error: 'Context parameter is required' });
+	}
+	// Validate required namespace parameter
+	if (!namespace) {
+		return res.status(400).json({ error: 'Namespace parameter is required' });
+	}
+
+	// Build kubectl command with context
+	const sanitizedContext = context.replace(/[^a-zA-Z0-9_\-\.@]/g, '');
+	const cmd = `kubectl get events -n ${namespace} --field-selector involvedObject.name=${name} --context ${sanitizedContext} -o json`;
+
+	exec(cmd, (error, stdout, stderr) => {
+		if (error) {
+			return res.status(500).json({ error: 'Failed to fetch events', details: stderr });
+		}
+
+		try {
+			const eventsData = JSON.parse(stdout);
+			const events = eventsData.items.map((event) => ({
+				type: event.type,
+				reason: event.reason,
+				message: event.message,
+				firstTimestamp: event.firstTimestamp,
+				lastTimestamp: event.lastTimestamp,
+				count: event.count
+			}));
+			res.json(events);
+		} catch (parseError) {
+			res.status(500).json({ error: 'Failed to parse events data' });
+		}
+	});
+});
+
+// Get available kubectl contexts
+app.get('/contexts', async (req, res) => {
+	exec('kubectl config get-contexts -o name', (error, stdout, stderr) => {
+		if (error) {
+			console.error(`Error fetching contexts: ${error}`);
+			return res.status(500).json({ error: 'Failed to fetch contexts', details: stderr });
+		}
+
+		try {
+			const contexts = stdout
+				.trim()
+				.split('\n')
+				.filter((context) => context.trim() !== '')
+				.map((context) => context.trim());
+			res.json(contexts);
+		} catch (parseError) {
+			console.error('Error parsing contexts data:', parseError);
+			res.status(500).json({ error: 'Failed to parse contexts data' });
+		}
+	});
+});
+
+// Check kubectl availability
+app.get('/check-kubectl', (req, res) => {
+	exec('kubectl version --client -o json', (error, stdout, stderr) => {
+		if (error) {
+			return res.status(500).json({
+				available: false,
+				error: 'kubectl not found or not configured',
+				details: stderr
+			});
+		}
+
+		try {
+			const versionData = JSON.parse(stdout);
+			res.json({
+				available: true,
+				version: versionData.clientVersion
+			});
+		} catch {
+			res.json({
+				available: true,
+				version: 'unknown'
+			});
 		}
 	});
 });
@@ -86,15 +230,22 @@ wss.on('connection', (ws) => {
 					logProcess.kill();
 				}
 
-				const { namespace, pod, tailLines } = data;
+				const { namespace, pod, tailLines, context } = data;
+
+				// Validate required context parameter
+				if (!context) {
+					ws.send('[ERROR] Context parameter is required');
+					return;
+				}
 
 				// Sanitize inputs to prevent command injection
 				const sanitizedNamespace = namespace.replace(/[^a-zA-Z0-9_\-]/g, '');
 				const sanitizedPod = pod.replace(/[^a-zA-Z0-9_\-\.]/g, '');
 				const sanitizedTailLines = Math.min(Math.max(1, parseInt(tailLines) || 100), 10000);
+				const sanitizedContext = context.replace(/[^a-zA-Z0-9_\-\.@]/g, '');
 
 				console.log(
-					`Starting log stream for pod ${sanitizedPod} in namespace ${sanitizedNamespace}`
+					`Starting log stream for pod ${sanitizedPod} in namespace ${sanitizedNamespace} with context ${sanitizedContext}`
 				);
 
 				// Start kubectl logs with follow flag
@@ -105,7 +256,9 @@ wss.on('connection', (ws) => {
 					sanitizedNamespace,
 					sanitizedPod,
 					'--tail',
-					sanitizedTailLines.toString()
+					sanitizedTailLines.toString(),
+					'--context',
+					sanitizedContext
 				];
 
 				logProcess = spawn('kubectl', args);
@@ -150,81 +303,6 @@ wss.on('connection', (ws) => {
 		console.log('WebSocket client disconnected');
 		if (logProcess) {
 			logProcess.kill();
-		}
-	});
-});
-
-// Advanced endpoints for additional functionality
-
-// Get pod details
-app.get('/pod/:namespace/:name', (req, res) => {
-	const { namespace, name } = req.params;
-
-	exec(`kubectl get pod ${name} -n ${namespace} -o json`, (error, stdout, stderr) => {
-		if (error) {
-			return res.status(500).json({ error: 'Failed to fetch pod details', details: stderr });
-		}
-
-		try {
-			const podData = JSON.parse(stdout);
-			res.json(podData);
-		} catch (parseError) {
-			res.status(500).json({ error: 'Failed to parse pod data' });
-		}
-	});
-});
-
-// Get recent pod events
-app.get('/events/:namespace/:name', (req, res) => {
-	const { namespace, name } = req.params;
-
-	exec(
-		`kubectl get events -n ${namespace} --field-selector involvedObject.name=${name} -o json`,
-		(error, stdout, stderr) => {
-			if (error) {
-				return res.status(500).json({ error: 'Failed to fetch events', details: stderr });
-			}
-
-			try {
-				const eventsData = JSON.parse(stdout);
-				const events = eventsData.items.map((event) => ({
-					type: event.type,
-					reason: event.reason,
-					message: event.message,
-					firstTimestamp: event.firstTimestamp,
-					lastTimestamp: event.lastTimestamp,
-					count: event.count
-				}));
-				res.json(events);
-			} catch (parseError) {
-				res.status(500).json({ error: 'Failed to parse events data' });
-			}
-		}
-	);
-});
-
-// Check kubectl availability
-app.get('/check-kubectl', (req, res) => {
-	exec('kubectl version --client -o json', (error, stdout, stderr) => {
-		if (error) {
-			return res.status(500).json({
-				available: false,
-				error: 'kubectl not found or not configured',
-				details: stderr
-			});
-		}
-
-		try {
-			const versionData = JSON.parse(stdout);
-			res.json({
-				available: true,
-				version: versionData.clientVersion
-			});
-		} catch (parseError) {
-			res.json({
-				available: true,
-				version: 'unknown'
-			});
 		}
 	});
 });
