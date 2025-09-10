@@ -338,18 +338,23 @@
 			<h1 class="mb-6 text-3xl font-bold">Log Analyzer</h1>
 
 			<!-- Input Section -->
-			<div class="mb-6">
-				<label for="log-input" class="mb-2 block text-sm font-medium"
-					>Paste your logs here (one JSON object per line):</label
-				>
-				<textarea
-					id="log-input"
-					bind:value={logInput}
-					oninput={() => parseLogLines(logInput)}
-					placeholder="Paste JSON logs here, one per line..."
-					class="h-32 w-full rounded-md border border-gray-300 p-3 font-mono text-sm focus:border-transparent focus:ring-2 focus:ring-blue-500"
-				></textarea>
-				<BridgeManager />
+			<div class="mb-6 flex gap-4">
+				<div class="flex-grow">
+					<label for="log-input" class="mb-2 block text-sm font-medium"
+						>Paste your logs here (one JSON object per line):</label
+					>
+					<textarea
+						id="log-input"
+						bind:value={logInput}
+						oninput={() => parseLogLines(logInput)}
+						placeholder="Paste JSON logs here, one per line..."
+						class="h-32 w-full rounded-md border border-gray-300 p-3 font-mono text-sm focus:border-transparent focus:ring-2 focus:ring-blue-500"
+					></textarea>
+				</div>
+				<div>
+					<span class="text-sm font-medium">Bridge Manager:</span>
+					<BridgeManager />
+				</div>
 			</div>
 
 			<!-- Column Management -->
