@@ -1,0 +1,30 @@
+{
+	"name": "kubectl-bridge-server",
+	"version": "1.0.0",
+	"description": "Local bridge server to enable kubectl access from web applications",
+	"main": "kubectl-bridge.js",
+	"scripts": {
+		"start": "node kubectl-bridge.js",
+		"dev": "nodemon kubectl-bridge.js"
+	},
+	"keywords": [
+		"kubernetes",
+		"kubectl",
+		"logs",
+		"bridge",
+		"websocket"
+	],
+	"author": "",
+	"license": "MIT",
+	"dependencies": {
+		"express": "^4.18.2",
+		"cors": "^2.8.5",
+		"ws": "^8.14.2"
+	},
+	"devDependencies": {
+		"nodemon": "^3.0.1"
+	},
+	"engines": {
+		"node": ">=14.0.0"
+	}
+}
