@@ -489,6 +489,7 @@
 												</div>
 											</div>
 										</th>
+										<th></th>
 									{/each}
 								</tr>
 							</thead>
@@ -511,47 +512,45 @@
 													? 'border-t-1 border-blue-500 '
 													: ''}"
 											>
-												<div class="flex justify-between">
-													<div class="truncate" title={String(cellValue)}>
-														{#if column.field === '__raw__'}
-															<code class="rounded bg-gray-100 px-1 py-0.5 text-xs">
-																{cellValue}
-															</code>
-														{:else if typeof cellValue === 'object' && cellValue !== null}
-															<code class="rounded bg-blue-50 px-1 py-0.5 text-xs text-blue-800">
-																{JSON.stringify(cellValue)}
-															</code>
-														{:else}
+												<div class="truncate" title={String(cellValue)}>
+													{#if column.field === '__raw__'}
+														<code class="rounded bg-gray-100 px-1 py-0.5 text-xs">
 															{cellValue}
-														{/if}
-													</div>
-													{#if column.field !== '__raw__' && cellValue !== ''}
-														<div>
-															<button
-																onclick={(evt) => {
-																	evt.stopPropagation();
-																	addFilterExpression({
-																		enabled: true,
-																		expression: `${column.field} = ${cellValue}`,
-																		id: Date.now().toString()
-																	});
-																	updateFilteredLogs();
-																}}>⊕</button
-															>
-															<button
-																onclick={(evt) => {
-																	evt.stopPropagation();
-																	addFilterExpression({
-																		enabled: true,
-																		expression: `${column.field} != ${cellValue}`,
-																		id: Date.now().toString()
-																	});
-																	updateFilteredLogs();
-																}}>⊖</button
-															>
-														</div>
+														</code>
+													{:else if typeof cellValue === 'object' && cellValue !== null}
+														<code class="rounded bg-blue-50 px-1 py-0.5 text-xs text-blue-800">
+															{JSON.stringify(cellValue)}
+														</code>
+													{:else}
+														{cellValue}
 													{/if}
 												</div>
+											</td>
+											<td>
+												{#if column.field !== '__raw__' && cellValue !== ''}
+													<button
+														onclick={(evt) => {
+															evt.stopPropagation();
+															addFilterExpression({
+																enabled: true,
+																expression: `${column.field} = ${cellValue}`,
+																id: Date.now().toString()
+															});
+															updateFilteredLogs();
+														}}>⊕</button
+													>
+													<button
+														onclick={(evt) => {
+															evt.stopPropagation();
+															addFilterExpression({
+																enabled: true,
+																expression: `${column.field} != ${cellValue}`,
+																id: Date.now().toString()
+															});
+															updateFilteredLogs();
+														}}>⊖</button
+													>
+												{/if}
 											</td>
 										{/each}
 									</tr>
