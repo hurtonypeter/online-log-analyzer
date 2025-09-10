@@ -352,7 +352,6 @@
 					></textarea>
 				</div>
 				<div>
-					<span class="text-sm font-medium">Bridge Manager:</span>
 					<BridgeManager />
 				</div>
 			</div>
