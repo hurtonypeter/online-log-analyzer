@@ -279,13 +279,13 @@
 		}
 	}
 
-	function addFilterExpression() {
-		const newFilter: FilterExpressionType = {
+	function addFilterExpression(filter: FilterExpressionType | null = null) {
+		filter ??= {
 			id: Date.now().toString(),
 			expression: '',
 			enabled: true
 		};
-		filterExpressions = [...filterExpressions, newFilter];
+		filterExpressions = [...filterExpressions, filter];
 	}
 
 	function updateFilterExpression(updatedFilter: FilterExpressionType) {
@@ -419,7 +419,7 @@
 					<h2 class="text-lg font-semibold">Filter Logs</h2>
 					<div class="flex items-center gap-2">
 						<button
-							onclick={addFilterExpression}
+							onclick={() => addFilterExpression()}
 							class="rounded-md bg-green-600 px-3 py-1 text-sm text-white transition-colors hover:bg-green-700"
 						>
 							+ Add Filter
@@ -511,15 +511,45 @@
 													? 'border-t-1 border-blue-500 '
 													: ''}"
 											>
-												<div class="truncate" title={String(cellValue)}>
-													{#if column.field === '__raw__'}
-														<code class="rounded bg-gray-100 px-1 py-0.5 text-xs">{cellValue}</code>
-													{:else if typeof cellValue === 'object' && cellValue !== null}
-														<code class="rounded bg-blue-50 px-1 py-0.5 text-xs text-blue-800"
-															>{JSON.stringify(cellValue)}</code
-														>
-													{:else}
-														{cellValue}
+												<div class="flex justify-between">
+													<div class="truncate" title={String(cellValue)}>
+														{#if column.field === '__raw__'}
+															<code class="rounded bg-gray-100 px-1 py-0.5 text-xs">
+																{cellValue}
+															</code>
+														{:else if typeof cellValue === 'object' && cellValue !== null}
+															<code class="rounded bg-blue-50 px-1 py-0.5 text-xs text-blue-800">
+																{JSON.stringify(cellValue)}
+															</code>
+														{:else}
+															{cellValue}
+														{/if}
+													</div>
+													{#if column.field !== '__raw__' && cellValue !== ''}
+														<div>
+															<button
+																onclick={(evt) => {
+																	evt.stopPropagation();
+																	addFilterExpression({
+																		enabled: true,
+																		expression: `${column.field} = ${cellValue}`,
+																		id: Date.now().toString()
+																	});
+																	updateFilteredLogs();
+																}}>⊕</button
+															>
+															<button
+																onclick={(evt) => {
+																	evt.stopPropagation();
+																	addFilterExpression({
+																		enabled: true,
+																		expression: `${column.field} != ${cellValue}`,
+																		id: Date.now().toString()
+																	});
+																	updateFilteredLogs();
+																}}>⊖</button
+															>
+														</div>
 													{/if}
 												</div>
 											</td>
