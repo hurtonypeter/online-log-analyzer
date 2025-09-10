@@ -157,6 +157,7 @@ app.get('/events/:name', (req, res) => {
 			}));
 			res.json(events);
 		} catch (parseError) {
+			console.error('Error while getting events data:', parseError);
 			res.status(500).json({ error: 'Failed to parse events data' });
 		}
 	});
