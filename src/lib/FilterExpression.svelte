@@ -50,7 +50,7 @@
 			type="text"
 			value={filter.expression}
 			oninput={(e) => updateExpression(e.currentTarget.value)}
-			placeholder="e.g., foo.bar='value', level>3, message contains('error')"
+			placeholder="e.g., foo.bar='value', level>3, message contains('error'), foo = 'bar' or foo = 'baz'"
 			class="flex-1 rounded border border-gray-300 px-3 py-1 focus:border-transparent focus:ring-2 focus:ring-blue-500 {filter.enabled
 				? ''
 				: 'bg-gray-100 text-gray-600'}"
@@ -103,6 +103,7 @@
 					<li><code>level = 'error'</code> - Simple field</li>
 					<li><code>message contains('failed')</code> - Text search</li>
 					<li><code>user exists()</code> - Check if user field is present</li>
+					<li><code>foo = 'bar' or foo = 'baz'</code> - OR operation (matches either condition)</li>
 				</ul>
 			</div>
 		</div>

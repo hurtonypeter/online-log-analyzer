@@ -9,6 +9,8 @@ export interface ParsedFilter {
 	operator: string;
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	value: any;
+	// For OR operations, this can be an array of conditions
+	orConditions?: ParsedFilter[];
 }
 
 export type FilterOperator =
@@ -38,6 +40,72 @@ export class FilterParser {
 	];
 
 	static parse(expression: string): ParsedFilter | null {
+		if (!expression.trim()) return null;
+
+		// Check if expression contains OR operations
+		const orParts = this.splitByOr(expression);
+		if (orParts.length > 1) {
+			// Parse each OR condition
+			const conditions: ParsedFilter[] = [];
+			for (const part of orParts) {
+				const condition = this.parseSingleCondition(part.trim());
+				if (condition) {
+					conditions.push(condition);
+				}
+			}
+			
+			if (conditions.length > 0) {
+				// Return the first condition with OR conditions attached
+				const mainCondition = conditions[0];
+				if (conditions.length > 1) {
+					mainCondition.orConditions = conditions.slice(1);
+				}
+				return mainCondition;
+			}
+		}
+
+		// Single condition - parse normally
+		return this.parseSingleCondition(expression);
+	}
+
+	private static splitByOr(expression: string): string[] {
+		// Split by 'or' but be careful about quotes
+		const parts: string[] = [];
+		let current = '';
+		let inQuotes = false;
+		let quoteChar = '';
+		
+		for (let i = 0; i < expression.length; i++) {
+			const char = expression[i];
+			
+			if ((char === '"' || char === "'") && !inQuotes) {
+				inQuotes = true;
+				quoteChar = char;
+				current += char;
+			} else if (char === quoteChar && inQuotes) {
+				inQuotes = false;
+				quoteChar = '';
+				current += char;
+			} else if (!inQuotes && expression.slice(i, i + 2).toLowerCase() === 'or' && 
+				(i === 0 || /\s/.test(expression[i - 1])) &&
+				(i + 2 >= expression.length || /\s/.test(expression[i + 2]))) {
+				// Found 'or' outside quotes, surrounded by whitespace or at boundaries
+				parts.push(current.trim());
+				current = '';
+				i += 1; // Skip the 'r' in 'or'
+			} else {
+				current += char;
+			}
+		}
+		
+		if (current.trim()) {
+			parts.push(current.trim());
+		}
+		
+		return parts.filter(part => part.length > 0);
+	}
+
+	private static parseSingleCondition(expression: string): ParsedFilter | null {
 		if (!expression.trim()) return null;
 
 		// Handle function-style operators like contains('value'), startswith('value'), endswith('value')
@@ -102,6 +170,22 @@ export class FilterParser {
 
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	static evaluate(logEntry: any, filter: ParsedFilter): boolean {
+		// Evaluate the main condition
+		const mainResult = this.evaluateSingleCondition(logEntry, filter);
+		
+		// If there are OR conditions, evaluate them
+		if (filter.orConditions && filter.orConditions.length > 0) {
+			// Return true if main condition OR any of the OR conditions is true
+			return mainResult || filter.orConditions.some(orCondition => 
+				this.evaluateSingleCondition(logEntry, orCondition)
+			);
+		}
+		
+		return mainResult;
+	}
+
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	private static evaluateSingleCondition(logEntry: any, filter: ParsedFilter): boolean {
 		const fieldValue = this.getNestedValue(logEntry, filter.field);
 
 		switch (filter.operator) {
