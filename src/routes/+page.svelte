@@ -6,6 +6,7 @@
 		FilterParser,
 		type FilterExpression as FilterExpressionType
 	} from '$lib/filterParser.js';
+	import BridgeManager from '$lib/BridgeManager.svelte';
 
 	let logInput = $state('');
 	let parsedLogs = $state<any[]>([]);
@@ -348,6 +349,7 @@
 					placeholder="Paste JSON logs here, one per line..."
 					class="h-32 w-full rounded-md border border-gray-300 p-3 font-mono text-sm focus:border-transparent focus:ring-2 focus:ring-blue-500"
 				></textarea>
+				<BridgeManager />
 			</div>
 
 			<!-- Column Management -->
