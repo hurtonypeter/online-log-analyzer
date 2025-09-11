@@ -9,6 +9,15 @@
 		context: string;
 		namespace: string;
 		active: boolean;
+		sessionId?: string;
+		container?: string;
+	}
+
+	interface SessionMessage {
+		sessionId: string;
+		type: 'log' | 'error' | 'info' | 'sessions';
+		message: string;
+		timestamp: string;
 	}
 
 	interface Pod {
@@ -19,15 +28,7 @@
 		restartCount: number;
 	}
 
-	let logTailings: LogTailing[] = $state([
-		{
-			podName: 'example-pod-1',
-			context: 'minikube',
-			namespace: 'default',
-			active: true
-		},
-		{ podName: 'pod2', context: 'minikube', namespace: 'default', active: false }
-	]);
+	let logTailings: LogTailing[] = $state([]);
 	let showAddPopup = $state(false);
 	let contexts: string[] = $state([]);
 	let namespaces: string[] = $state([]);
@@ -40,6 +41,12 @@
 		namespaces: false,
 		pods: false
 	});
+
+	// WebSocket connection and session management
+	let ws: WebSocket | null = $state(null);
+	let wsConnected = $state(false);
+	let connectionAttempts = $state(0);
+	const MAX_RECONNECT_ATTEMPTS = 5;
 
 	async function fetchContexts() {
 		loading.contexts = true;
@@ -132,12 +139,144 @@
 		}
 	}
 
-	function removeTailing(podName: string) {
-		pauseTailing(podName);
-		logTailings = logTailings.filter((t) => t.podName !== podName);
+	// WebSocket connection management
+	function connectWebSocket() {
+		if (!bridgeUrl || ws) return;
+
+		// Construct WebSocket URL properly
+		const wsUrl = bridgeUrl.replace('http://', 'ws://').replace('https://', 'wss://');
+
+		try {
+			ws = new WebSocket(wsUrl);
+
+			ws.onopen = () => {
+				console.log('WebSocket connected');
+				wsConnected = true;
+				connectionAttempts = 0;
+			};
+
+			ws.onmessage = (event) => {
+				try {
+					const data: SessionMessage = JSON.parse(event.data);
+					console.log('WebSocket message:', data);
+
+					// Find the tailing associated with this session
+					const tailing = logTailings.find((t) => t.sessionId === data.sessionId);
+					if (tailing && data.type === 'info' && data.message.includes('stopped')) {
+						tailing.active = false;
+						tailing.sessionId = undefined;
+					}
+				} catch (error) {
+					console.log('WebSocket raw message:', event.data);
+				}
+			};
+
+			ws.onclose = () => {
+				console.log('WebSocket disconnected');
+				wsConnected = false;
+				ws = null;
+
+				// Mark all tailings as inactive
+				logTailings = logTailings.map((tailing) => ({
+					...tailing,
+					active: false,
+					sessionId: undefined
+				}));
+
+				// Attempt to reconnect
+				if (connectionAttempts < MAX_RECONNECT_ATTEMPTS) {
+					connectionAttempts++;
+					setTimeout(connectWebSocket, 2000 * connectionAttempts);
+				}
+			};
+
+			ws.onerror = (error) => {
+				console.error('WebSocket error:', error);
+			};
+		} catch (error) {
+			console.error('Failed to create WebSocket connection:', error);
+		}
 	}
-	function pauseTailing(podName: string) {}
-	function startTailing(podName: string) {}
+
+	function disconnectWebSocket() {
+		if (ws) {
+			ws.close();
+			ws = null;
+			wsConnected = false;
+
+			// Mark all tailings as inactive
+			logTailings = logTailings.map((tailing) => ({
+				...tailing,
+				active: false,
+				sessionId: undefined
+			}));
+		}
+	}
+
+	function sendWebSocketMessage(message: any) {
+		if (ws && wsConnected) {
+			ws.send(JSON.stringify(message));
+		} else {
+			console.warn('WebSocket not connected');
+		}
+	}
+
+	function removeTailing(index: number) {
+		const tailing = logTailings[index];
+		if (tailing) {
+			stopTailing(tailing);
+			logTailings = logTailings.filter((_, i) => i !== index);
+		}
+	}
+
+	function stopTailing(tailing: LogTailing) {
+		if (tailing.sessionId && ws && wsConnected) {
+			sendWebSocketMessage({
+				action: 'stop',
+				sessionId: tailing.sessionId
+			});
+		}
+		tailing.active = false;
+		tailing.sessionId = undefined;
+	}
+
+	function startTailing(tailing: LogTailing) {
+		if (!ws || !wsConnected) {
+			console.warn('WebSocket not connected');
+			return;
+		}
+
+		// Generate a unique session ID
+		const sessionId = `${tailing.context}-${tailing.namespace}-${tailing.podName}-${Date.now()}`;
+
+		sendWebSocketMessage({
+			action: 'start',
+			sessionId,
+			context: tailing.context,
+			namespace: tailing.namespace,
+			pod: tailing.podName,
+			container: tailing.container,
+			tailLines: 100
+		});
+
+		tailing.active = true;
+		tailing.sessionId = sessionId;
+	}
+
+	// Lifecycle effects
+	$effect(() => {
+		if (bridgeUrl && !ws && !wsConnected) {
+			connectWebSocket();
+		}
+	});
+
+	// Separate effect for cleanup
+	$effect(() => {
+		// Cleanup on unmount
+		return () => {
+			disconnectWebSocket();
+		};
+	});
 
 	$effect(() => {
 		if (selectedContext) {
@@ -162,10 +301,23 @@
 		</div>
 	{:else}
 		<div class="mb-2 flex items-center justify-between gap-4">
-			<h2 class="text-sm font-semibold text-gray-800">Log Tailing Manager</h2>
+			<div class="flex items-center gap-2">
+				<h2 class="text-sm font-semibold text-gray-800">Log Tailing Manager</h2>
+				<div class="flex items-center gap-1">
+					<div
+						class={`h-2 w-2 rounded-full ${wsConnected ? 'bg-green-500' : 'bg-red-500'}`}
+						title={wsConnected ? 'WebSocket connected' : 'WebSocket disconnected'}
+					></div>
+					<span class="text-xs text-gray-500">
+						{wsConnected ? 'Connected' : 'Disconnected'}
+					</span>
+				</div>
+			</div>
 			<button
-				class="text-md cursor-pointer text-blue-500 hover:text-blue-700"
+				class="text-md cursor-pointer text-blue-500 hover:text-blue-700 disabled:cursor-not-allowed disabled:text-gray-400"
 				onclick={openAddPopup}
+				disabled={!wsConnected}
+				title={wsConnected ? 'Add new log tailing' : 'WebSocket connection required'}
 			>
 				+
 			</button>
@@ -186,18 +338,22 @@
 							<span class="text-xs">({tailing.context}/{tailing.namespace})</span>
 						</div>
 					</div>
-					<div>
+					<div class="flex items-center gap-1">
 						{#if tailing.active}
 							<button
-								class="text-md cursor-pointer text-blue-500 hover:text-blue-700"
-								onclick={() => pauseTailing(tailing.podName)}
+								class="text-md cursor-pointer text-blue-500 hover:text-blue-700 disabled:cursor-not-allowed disabled:text-gray-400"
+								onclick={() => stopTailing(tailing)}
+								disabled={!wsConnected}
+								title="Stop log tailing"
 							>
 								⏸
 							</button>
 						{:else}
 							<button
-								class="text-md cursor-pointer text-green-500 hover:text-green-700"
-								onclick={() => startTailing(tailing.podName)}
+								class="text-md cursor-pointer text-green-500 hover:text-green-700 disabled:cursor-not-allowed disabled:text-gray-400"
+								onclick={() => startTailing(tailing)}
+								disabled={!wsConnected}
+								title="Start log tailing"
 							>
 								▶
 							</button>
@@ -205,6 +361,7 @@
 						<button
 							class="text-md cursor-pointer text-red-500 hover:text-red-700"
 							onclick={() => removeTailing(index)}
+							title="Remove log tailing"
 						>
 							✕
 						</button>
