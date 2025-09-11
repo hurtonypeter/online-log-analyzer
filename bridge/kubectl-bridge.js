@@ -65,7 +65,7 @@ app.get('/pods', async (req, res) => {
 	const sanitizedContext = context.replace(/[^a-zA-Z0-9_\-\.@]/g, '');
 	const cmd = `kubectl get pods -n ${namespace} --context ${sanitizedContext} -o json`;
 
-	exec(cmd, (error, stdout, stderr) => {
+	exec(cmd, { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
 		if (error) {
 			console.error(`Error fetching pods: ${error}`);
 			return res.status(500).json({ error: 'Failed to fetch pods', details: stderr });
@@ -303,7 +303,11 @@ wss.on('connection', (ws) => {
 				});
 
 				// Send session started confirmation
-				sendSessionMessage(finalSessionId, `Log session started for ${sanitizedPod}${sanitizedContainer ? ` (${sanitizedContainer})` : ''}`, 'info');
+				sendSessionMessage(
+					finalSessionId,
+					`Log session started for ${sanitizedPod}${sanitizedContainer ? ` (${sanitizedContainer})` : ''}`,
+					'info'
+				);
 
 				// Stream stdout to WebSocket
 				logProcess.stdout.on('data', (data) => {
@@ -331,19 +335,19 @@ wss.on('connection', (ws) => {
 					}
 					logSessions.delete(finalSessionId);
 				});
-
 			} else if (data.action === 'stop') {
 				const { sessionId } = data;
 				if (!sessionId) {
-					ws.send(JSON.stringify({
-						type: 'error',
-						message: 'Session ID is required for stop action',
-						timestamp: new Date().toISOString()
-					}));
+					ws.send(
+						JSON.stringify({
+							type: 'error',
+							message: 'Session ID is required for stop action',
+							timestamp: new Date().toISOString()
+						})
+					);
 					return;
 				}
 				stopSession(sessionId);
-
 			} else if (data.action === 'list') {
 				const sessions = Array.from(logSessions.entries()).map(([id, session]) => ({
 					sessionId: id,
@@ -353,28 +357,33 @@ wss.on('connection', (ws) => {
 					context: session.context,
 					startTime: session.startTime
 				}));
-				ws.send(JSON.stringify({
-					type: 'sessions',
-					sessions,
-					timestamp: new Date().toISOString()
-				}));
-
+				ws.send(
+					JSON.stringify({
+						type: 'sessions',
+						sessions,
+						timestamp: new Date().toISOString()
+					})
+				);
 			} else if (data.action === 'stopAll') {
 				const sessionIds = Array.from(logSessions.keys());
 				sessionIds.forEach(stopSession);
-				ws.send(JSON.stringify({
-					type: 'info',
-					message: `Stopped ${sessionIds.length} sessions`,
-					timestamp: new Date().toISOString()
-				}));
+				ws.send(
+					JSON.stringify({
+						type: 'info',
+						message: `Stopped ${sessionIds.length} sessions`,
+						timestamp: new Date().toISOString()
+					})
+				);
 			}
 		} catch (error) {
 			console.error('Error processing WebSocket message:', error);
-			ws.send(JSON.stringify({
-				type: 'error',
-				message: error.message,
-				timestamp: new Date().toISOString()
-			}));
+			ws.send(
+				JSON.stringify({
+					type: 'error',
+					message: error.message,
+					timestamp: new Date().toISOString()
+				})
+			);
 		}
 	});
 
