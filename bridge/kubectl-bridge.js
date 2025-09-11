@@ -3,6 +3,7 @@ const cors = require('cors');
 const { WebSocketServer } = require('ws');
 const { spawn, exec } = require('child_process');
 const http = require('http');
+const crypto = require('crypto');
 
 const app = express();
 const PORT = 3001;
@@ -219,34 +220,56 @@ const wss = new WebSocketServer({ server });
 
 wss.on('connection', (ws) => {
 	console.log('WebSocket client connected');
-	let logProcess = null;
+	const logSessions = new Map();
+
+	const sendSessionMessage = (sessionId, message, type = 'log') => {
+		const payload = JSON.stringify({
+			sessionId,
+			type,
+			message,
+			timestamp: new Date().toISOString()
+		});
+		ws.send(payload);
+	};
+
+	const stopSession = (sessionId) => {
+		const session = logSessions.get(sessionId);
+		if (session) {
+			session.process.kill();
+			logSessions.delete(sessionId);
+			sendSessionMessage(sessionId, 'Session stopped', 'info');
+			console.log(`Stopped log session ${sessionId}`);
+		}
+	};
 
 	ws.on('message', (message) => {
 		try {
 			const data = JSON.parse(message);
 
 			if (data.action === 'start') {
-				// Stop any existing process
-				if (logProcess) {
-					logProcess.kill();
-				}
+				const { namespace, pod, tailLines, context, container, sessionId } = data;
+				const finalSessionId = sessionId || crypto.randomUUID();
 
-				const { namespace, pod, tailLines, context } = data;
+				// Stop existing session with same ID if it exists
+				if (logSessions.has(finalSessionId)) {
+					stopSession(finalSessionId);
+				}
 
 				// Validate required context parameter
 				if (!context) {
-					ws.send('[ERROR] Context parameter is required');
+					sendSessionMessage(finalSessionId, 'Context parameter is required', 'error');
 					return;
 				}
 
 				// Sanitize inputs to prevent command injection
-				const sanitizedNamespace = namespace.replace(/[^a-zA-Z0-9_\-]/g, '');
-				const sanitizedPod = pod.replace(/[^a-zA-Z0-9_\-\.]/g, '');
+				const sanitizedNamespace = namespace.replace(/[^a-zA-Z0-9_-]/g, '');
+				const sanitizedPod = pod.replace(/[^a-zA-Z0-9_.'-]/g, '');
+				const sanitizedContainer = container ? container.replace(/[^a-zA-Z0-9_.'-]/g, '') : null;
 				const sanitizedTailLines = Math.min(Math.max(1, parseInt(tailLines) || 100), 10000);
-				const sanitizedContext = context.replace(/[^a-zA-Z0-9_\-\.@]/g, '');
+				const sanitizedContext = context.replace(/[^a-zA-Z0-9_.@'-]/g, '');
 
 				console.log(
-					`Starting log stream for pod ${sanitizedPod} in namespace ${sanitizedNamespace} with context ${sanitizedContext}`
+					`Starting log session ${finalSessionId} for pod ${sanitizedPod}${sanitizedContainer ? ` container ${sanitizedContainer}` : ''} in namespace ${sanitizedNamespace} with context ${sanitizedContext}`
 				);
 
 				// Start kubectl logs with follow flag
@@ -262,49 +285,107 @@ wss.on('connection', (ws) => {
 					sanitizedContext
 				];
 
-				logProcess = spawn('kubectl', args);
+				// Add container flag if specified
+				if (sanitizedContainer) {
+					args.push('-c', sanitizedContainer);
+				}
+
+				const logProcess = spawn('kubectl', args);
+
+				// Store session info
+				logSessions.set(finalSessionId, {
+					process: logProcess,
+					namespace: sanitizedNamespace,
+					pod: sanitizedPod,
+					container: sanitizedContainer,
+					context: sanitizedContext,
+					startTime: new Date().toISOString()
+				});
+
+				// Send session started confirmation
+				sendSessionMessage(finalSessionId, `Log session started for ${sanitizedPod}${sanitizedContainer ? ` (${sanitizedContainer})` : ''}`, 'info');
 
 				// Stream stdout to WebSocket
 				logProcess.stdout.on('data', (data) => {
 					const lines = data.toString().split('\n');
 					lines.forEach((line) => {
 						if (line.trim()) {
-							ws.send(line);
+							sendSessionMessage(finalSessionId, line, 'log');
 						}
 					});
 				});
 
 				// Stream stderr to WebSocket
 				logProcess.stderr.on('data', (data) => {
-					ws.send(`[ERROR] ${data.toString()}`);
+					sendSessionMessage(finalSessionId, data.toString(), 'error');
 				});
 
 				logProcess.on('error', (error) => {
-					ws.send(`[ERROR] Failed to start kubectl: ${error.message}`);
+					sendSessionMessage(finalSessionId, `Failed to start kubectl: ${error.message}`, 'error');
+					logSessions.delete(finalSessionId);
 				});
 
 				logProcess.on('close', (code) => {
 					if (code !== 0 && code !== null) {
-						ws.send(`[INFO] kubectl process exited with code ${code}`);
+						sendSessionMessage(finalSessionId, `kubectl process exited with code ${code}`, 'info');
 					}
+					logSessions.delete(finalSessionId);
 				});
+
 			} else if (data.action === 'stop') {
-				if (logProcess) {
-					logProcess.kill();
-					logProcess = null;
+				const { sessionId } = data;
+				if (!sessionId) {
+					ws.send(JSON.stringify({
+						type: 'error',
+						message: 'Session ID is required for stop action',
+						timestamp: new Date().toISOString()
+					}));
+					return;
 				}
+				stopSession(sessionId);
+
+			} else if (data.action === 'list') {
+				const sessions = Array.from(logSessions.entries()).map(([id, session]) => ({
+					sessionId: id,
+					namespace: session.namespace,
+					pod: session.pod,
+					container: session.container,
+					context: session.context,
+					startTime: session.startTime
+				}));
+				ws.send(JSON.stringify({
+					type: 'sessions',
+					sessions,
+					timestamp: new Date().toISOString()
+				}));
+
+			} else if (data.action === 'stopAll') {
+				const sessionIds = Array.from(logSessions.keys());
+				sessionIds.forEach(stopSession);
+				ws.send(JSON.stringify({
+					type: 'info',
+					message: `Stopped ${sessionIds.length} sessions`,
+					timestamp: new Date().toISOString()
+				}));
 			}
 		} catch (error) {
 			console.error('Error processing WebSocket message:', error);
-			ws.send(`[ERROR] ${error.message}`);
+			ws.send(JSON.stringify({
+				type: 'error',
+				message: error.message,
+				timestamp: new Date().toISOString()
+			}));
 		}
 	});
 
 	ws.on('close', () => {
 		console.log('WebSocket client disconnected');
-		if (logProcess) {
-			logProcess.kill();
-		}
+		// Stop all sessions for this connection
+		logSessions.forEach((session, sessionId) => {
+			session.process.kill();
+			console.log(`Cleaned up session ${sessionId}`);
+		});
+		logSessions.clear();
 	});
 });
 
