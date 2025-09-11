@@ -1,6 +1,12 @@
 <script lang="ts">
 	import { page } from '$app/state';
 
+	interface Props {
+		onLogMessage?: (message: string) => void;
+	}
+
+	let { onLogMessage }: Props = $props();
+
 	const bridgeUrl = page.url.searchParams.get('bridgeUrl');
 	console.log('Bridge URL:', bridgeUrl);
 
@@ -159,6 +165,11 @@
 				try {
 					const data: SessionMessage = JSON.parse(event.data);
 					console.log('WebSocket message:', data);
+
+					// Handle log messages by calling the callback
+					if (data.type === 'log' && onLogMessage) {
+						onLogMessage(data.message);
+					}
 
 					// Find the tailing associated with this session
 					const tailing = logTailings.find((t) => t.sessionId === data.sessionId);

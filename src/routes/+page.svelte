@@ -329,6 +329,16 @@
 		filterExpressions;
 		saveFiltersToStorage();
 	});
+
+	function handleLogMessage(message: string) {
+		// Append the log message to the textarea, preserving existing content
+		if (logInput.length > 0 && !logInput.endsWith('\n')) {
+			logInput += '\n';
+		}
+		logInput += message;
+		// Re-parse the logs to update the display
+		parseLogLines(logInput);
+	}
 </script>
 
 <div class="flex min-h-screen bg-gray-50">
@@ -352,7 +362,7 @@
 					></textarea>
 				</div>
 				<div>
-					<BridgeManager />
+					<BridgeManager onLogMessage={handleLogMessage} />
 				</div>
 			</div>
 
