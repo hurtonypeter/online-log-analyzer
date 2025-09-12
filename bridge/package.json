@@ -1,8 +1,11 @@
 {
-	"name": "kubectl-bridge-server",
+	"name": "json-log-analyzer",
 	"version": "1.0.0",
 	"description": "Local bridge server to enable kubectl access from web applications",
 	"main": "kubectl-bridge.js",
+	"bin": {
+		"json-log-analyzer": "./kubectl-bridge.js"
+	},
 	"scripts": {
 		"start": "node kubectl-bridge.js",
 		"dev": "nodemon kubectl-bridge.js"
@@ -26,5 +29,6 @@
 	},
 	"engines": {
 		"node": ">=14.0.0"
-	}
+	},
+	"preferGlobal": true
 }

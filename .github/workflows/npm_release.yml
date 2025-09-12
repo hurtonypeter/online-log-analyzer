@@ -1,0 +1,37 @@
+name: Publish to NPM
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Extract version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
+
+      - name: Update package.json version to match tag
+        run: npm version $VERSION --no-git-tag-version
+        working-directory: bridge
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: bridge
+
+      - name: Publish package
+        run: npm publish
+        working-directory: bridge
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
