@@ -8,6 +8,7 @@
 		"build": "vite build && touch build/.nojekyll",
 		"preview": "vite preview",
 		"build:gh-pages": "NODE_ENV=production vite build && touch build/.nojekyll",
+		"build:for-bridge": "BUILD_FOR_BRIDGE=true NODE_ENV=production vite build",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
@@ -56,10 +57,5 @@
 		"vite": "^7.0.4",
 		"vitest": "^3.2.3",
 		"vitest-browser-svelte": "^0.1.0"
-	},
-	"pnpm": {
-		"onlyBuiltDependencies": [
-			"esbuild"
-		]
 	}
 }

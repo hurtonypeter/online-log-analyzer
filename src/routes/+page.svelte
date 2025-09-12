@@ -361,9 +361,11 @@
 						class="h-32 w-full rounded-md border border-gray-300 p-3 font-mono text-sm focus:border-transparent focus:ring-2 focus:ring-blue-500"
 					></textarea>
 				</div>
-				<div>
-					<BridgeManager onLogMessage={handleLogMessage} />
-				</div>
+				{#if __BUILD_FOR_BRIDGE__}
+					<div>
+						<BridgeManager onLogMessage={handleLogMessage} />
+					</div>
+				{/if}
 			</div>
 
 			<!-- Column Management -->

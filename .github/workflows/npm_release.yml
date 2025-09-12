@@ -22,11 +22,16 @@ jobs:
         id: get_version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
 
+      - name: Install dependencies for main app
+        run: npm ci
+      - name: Build SPA for bridge
+        run: npm run build:for-bridge
+
       - name: Update package.json version to match tag
         run: npm version $VERSION --no-git-tag-version
         working-directory: bridge
 
-      - name: Install dependencies
+      - name: Install dependencies for bridge
         run: npm ci
         working-directory: bridge
 

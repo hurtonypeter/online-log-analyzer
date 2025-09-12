@@ -6,6 +6,7 @@ const { WebSocketServer } = require('ws');
 const { spawn, exec } = require('child_process');
 const http = require('http');
 const crypto = require('crypto');
+const path = require('path');
 
 const app = express();
 const PORT = 3001;
@@ -13,6 +14,9 @@ const PORT = 3001;
 // Enable CORS for the web app
 app.use(cors());
 app.use(express.json());
+
+// Serve static files from the built SPA
+app.use(express.static(path.join(__dirname, 'static')));
 
 // Health check endpoint
 app.get('/health', (req, res) => {

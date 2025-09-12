@@ -8,6 +8,9 @@ declare global {
 		// interface PageState {}
 		// interface Platform {}
 	}
+	
+	// Build-time environment variable
+	const __BUILD_FOR_BRIDGE__: boolean;
 }
 
 export {};

@@ -4,6 +4,9 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
 	plugins: [tailwindcss(), sveltekit()],
+	define: {
+		__BUILD_FOR_BRIDGE__: JSON.stringify(process.env.BUILD_FOR_BRIDGE === 'true')
+	},
 	test: {
 		expect: { requireAssertions: true },
 		projects: [

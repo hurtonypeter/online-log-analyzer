@@ -8,16 +8,16 @@ const config = {
 	preprocess: vitePreprocess(),
 
 	kit: {
-		// Configure for GitHub Pages deployment
+		// Configure for GitHub Pages deployment or bridge deployment
 		adapter: adapter({
-			pages: 'build',
-			assets: 'build',
+			pages: process.env.BUILD_FOR_BRIDGE ? 'bridge/static' : 'build',
+			assets: process.env.BUILD_FOR_BRIDGE ? 'bridge/static' : 'build',
 			fallback: 'index.html',
 			precompress: false,
 			strict: true
 		}),
 		paths: {
-			base: process.env.NODE_ENV === 'production' ? '/loganalyzer' : ''
+			base: process.env.NODE_ENV === 'production' && !process.env.BUILD_FOR_BRIDGE ? '/loganalyzer' : ''
 		}
 	}
 };

@@ -7,7 +7,7 @@
 
 	let { onLogMessage }: Props = $props();
 
-	const bridgeUrl = page.url.searchParams.get('bridgeUrl');
+	const bridgeUrl = `${page.url.protocol}//${page.url.host}`;
 	console.log('Bridge URL:', bridgeUrl);
 
 	interface LogTailing {
