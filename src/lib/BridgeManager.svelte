@@ -8,7 +8,6 @@
 	let { onLogMessage }: Props = $props();
 
 	const bridgeUrl = `${page.url.protocol}//${page.url.host}`;
-	console.log('Bridge URL:', bridgeUrl);
 
 	interface LogTailing {
 		podName: string;
@@ -303,180 +302,170 @@
 </script>
 
 <div class="mx-auto max-w-4xl">
-	{#if !bridgeUrl}
-		<div class="">
-			<h2 class="mb-4 text-sm font-semibold text-gray-800">Log Tailing Manager</h2>
-			<p class="text-xs text-gray-600">
-				This feature requires <br />a running bridge.
-			</p>
-		</div>
-	{:else}
-		<div class="mb-2 flex items-center justify-between gap-4">
-			<div class="flex items-center gap-2">
-				<h2 class="text-sm font-semibold text-gray-800">Log Tailing Manager</h2>
-				<div class="flex items-center gap-1">
-					<div
-						class={`h-2 w-2 rounded-full ${wsConnected ? 'bg-green-500' : 'bg-red-500'}`}
-						title={wsConnected ? 'WebSocket connected' : 'WebSocket disconnected'}
-					></div>
-					<span class="text-xs text-gray-500">
-						{wsConnected ? 'Connected' : 'Disconnected'}
-					</span>
-				</div>
+	<div class="mb-2 flex items-center justify-between gap-4">
+		<div class="flex items-center gap-2">
+			<h2 class="text-sm font-semibold text-gray-800">Log Tailing Manager</h2>
+			<div class="flex items-center gap-1">
+				<div
+					class={`h-2 w-2 rounded-full ${wsConnected ? 'bg-green-500' : 'bg-red-500'}`}
+					title={wsConnected ? 'WebSocket connected' : 'WebSocket disconnected'}
+				></div>
+				<span class="text-xs text-gray-500">
+					{wsConnected ? 'Connected' : 'Disconnected'}
+				</span>
 			</div>
-			<button
-				class="text-md cursor-pointer text-blue-500 hover:text-blue-700 disabled:cursor-not-allowed disabled:text-gray-400"
-				onclick={openAddPopup}
-				disabled={!wsConnected}
-				title={wsConnected ? 'Add new log tailing' : 'WebSocket connection required'}
-			>
-				+
-			</button>
 		</div>
+		<button
+			class="text-md cursor-pointer text-blue-500 hover:text-blue-700 disabled:cursor-not-allowed disabled:text-gray-400"
+			onclick={openAddPopup}
+			disabled={!wsConnected}
+			title={wsConnected ? 'Add new log tailing' : 'WebSocket connection required'}
+		>
+			+
+		</button>
+	</div>
 
-		<div class="flex flex-col gap-1">
-			{#if logTailings.length === 0}
-				<div class="rounded bg-gray-50 py-8 text-center text-gray-500">
-					No log tailings configured. Click "Add New" to get started.
-				</div>
-			{/if}
-
-			{#each logTailings as tailing, index}
-				<div class="flex items-start justify-between">
-					<div class="flex-1">
-						<div class="text-md mb-1 text-gray-800">
-							{tailing.podName} <br />
-							<span class="text-xs">({tailing.context}/{tailing.namespace})</span>
-						</div>
-					</div>
-					<div class="flex items-center gap-1">
-						{#if tailing.active}
-							<button
-								class="text-md cursor-pointer text-blue-500 hover:text-blue-700 disabled:cursor-not-allowed disabled:text-gray-400"
-								onclick={() => stopTailing(tailing)}
-								disabled={!wsConnected}
-								title="Stop log tailing"
-							>
-								⏸
-							</button>
-						{:else}
-							<button
-								class="text-md cursor-pointer text-green-500 hover:text-green-700 disabled:cursor-not-allowed disabled:text-gray-400"
-								onclick={() => startTailing(tailing)}
-								disabled={!wsConnected}
-								title="Start log tailing"
-							>
-								▶
-							</button>
-						{/if}
-						<button
-							class="text-md cursor-pointer text-red-500 hover:text-red-700"
-							onclick={() => removeTailing(index)}
-							title="Remove log tailing"
-						>
-							✕
-						</button>
-					</div>
-				</div>
-			{/each}
-		</div>
-
-		{#if showAddPopup}
-			<div
-				class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-				role="dialog"
-				aria-modal="true"
-				tabindex="-1"
-				onkeydown={(e) => e.key === 'Escape' && closeAddPopup()}
-			>
-				<div class="w-full max-w-md rounded-lg bg-white opacity-100 shadow-lg" role="document">
-					<div class="flex items-center justify-between border-b border-gray-200 p-4">
-						<h3 class="text-lg font-semibold text-gray-800">Add New Log Tailing</h3>
-						<button
-							class="flex h-8 w-8 items-center justify-center text-2xl text-gray-400 hover:text-gray-600"
-							onclick={closeAddPopup}
-						>
-							×
-						</button>
-					</div>
-
-					<div class="p-4">
-						<div class="mb-4">
-							<label for="context-select" class="mb-1 block font-medium text-gray-700"
-								>Context:</label
-							>
-							<select
-								id="context-select"
-								class="w-full rounded border border-gray-300 p-2 text-base disabled:bg-gray-100 disabled:text-gray-500"
-								bind:value={selectedContext}
-								disabled={loading.contexts}
-							>
-								<option value="">Select context...</option>
-								{#each contexts as context}
-									<option value={context}>{context}</option>
-								{/each}
-							</select>
-							{#if loading.contexts}
-								<div class="mt-1 text-sm text-gray-500 italic">Loading contexts...</div>
-							{/if}
-						</div>
-
-						<div class="mb-4">
-							<label for="namespace-select" class="mb-1 block font-medium text-gray-700"
-								>Namespace:</label
-							>
-							<select
-								id="namespace-select"
-								class="w-full rounded border border-gray-300 p-2 text-base disabled:bg-gray-100 disabled:text-gray-500"
-								bind:value={selectedNamespace}
-								disabled={!selectedContext || loading.namespaces}
-							>
-								<option value="">Select namespace...</option>
-								{#each namespaces as namespace}
-									<option value={namespace}>{namespace}</option>
-								{/each}
-							</select>
-							{#if loading.namespaces}
-								<div class="mt-1 text-sm text-gray-500 italic">Loading namespaces...</div>
-							{/if}
-						</div>
-
-						<div class="mb-4">
-							<label for="pod-select" class="mb-1 block font-medium text-gray-700">Pod:</label>
-							<select
-								id="pod-select"
-								class="w-full rounded border border-gray-300 p-2 text-base disabled:bg-gray-100 disabled:text-gray-500"
-								bind:value={selectedPod}
-								disabled={!selectedNamespace || loading.pods}
-							>
-								<option value="">Select pod...</option>
-								{#each pods as pod}
-									<option value={pod.name}>{pod.name} ({pod.status})</option>
-								{/each}
-							</select>
-							{#if loading.pods}
-								<div class="mt-1 text-sm text-gray-500 italic">Loading pods...</div>
-							{/if}
-						</div>
-					</div>
-
-					<div class="flex justify-end gap-2 border-t border-gray-200 p-4">
-						<button
-							class="rounded bg-gray-500 px-4 py-2 text-white hover:bg-gray-600"
-							onclick={closeAddPopup}
-						>
-							Cancel
-						</button>
-						<button
-							class="rounded bg-blue-500 px-4 py-2 text-white hover:bg-blue-600 disabled:cursor-not-allowed disabled:bg-gray-300"
-							onclick={addLogTailing}
-							disabled={!selectedContext || !selectedNamespace || !selectedPod}
-						>
-							Add
-						</button>
-					</div>
-				</div>
+	<div class="flex flex-col gap-1">
+		{#if logTailings.length === 0}
+			<div class="rounded bg-gray-50 py-8 text-center text-gray-500">
+				No log tailings configured.<br />Click "Add New" to get started.
 			</div>
 		{/if}
+
+		{#each logTailings as tailing, index}
+			<div class="flex items-start justify-between">
+				<div class="flex-1">
+					<div class="text-md mb-1 text-gray-800">
+						{tailing.podName} <br />
+						<span class="text-xs">({tailing.context}/{tailing.namespace})</span>
+					</div>
+				</div>
+				<div class="flex items-center gap-1">
+					{#if tailing.active}
+						<button
+							class="text-md cursor-pointer text-blue-500 hover:text-blue-700 disabled:cursor-not-allowed disabled:text-gray-400"
+							onclick={() => stopTailing(tailing)}
+							disabled={!wsConnected}
+							title="Stop log tailing"
+						>
+							⏸
+						</button>
+					{:else}
+						<button
+							class="text-md cursor-pointer text-green-500 hover:text-green-700 disabled:cursor-not-allowed disabled:text-gray-400"
+							onclick={() => startTailing(tailing)}
+							disabled={!wsConnected}
+							title="Start log tailing"
+						>
+							▶
+						</button>
+					{/if}
+					<button
+						class="text-md cursor-pointer text-red-500 hover:text-red-700"
+						onclick={() => removeTailing(index)}
+						title="Remove log tailing"
+					>
+						✕
+					</button>
+				</div>
+			</div>
+		{/each}
+	</div>
+
+	{#if showAddPopup}
+		<div
+			class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+			role="dialog"
+			aria-modal="true"
+			tabindex="-1"
+			onkeydown={(e) => e.key === 'Escape' && closeAddPopup()}
+		>
+			<div class="w-full max-w-md rounded-lg bg-white opacity-100 shadow-lg" role="document">
+				<div class="flex items-center justify-between border-b border-gray-200 p-4">
+					<h3 class="text-lg font-semibold text-gray-800">Add New Log Tailing</h3>
+					<button
+						class="flex h-8 w-8 items-center justify-center text-2xl text-gray-400 hover:text-gray-600"
+						onclick={closeAddPopup}
+					>
+						×
+					</button>
+				</div>
+
+				<div class="p-4">
+					<div class="mb-4">
+						<label for="context-select" class="mb-1 block font-medium text-gray-700">Context:</label
+						>
+						<select
+							id="context-select"
+							class="w-full rounded border border-gray-300 p-2 text-base disabled:bg-gray-100 disabled:text-gray-500"
+							bind:value={selectedContext}
+							disabled={loading.contexts}
+						>
+							<option value="">Select context...</option>
+							{#each contexts as context}
+								<option value={context}>{context}</option>
+							{/each}
+						</select>
+						{#if loading.contexts}
+							<div class="mt-1 text-sm text-gray-500 italic">Loading contexts...</div>
+						{/if}
+					</div>
+
+					<div class="mb-4">
+						<label for="namespace-select" class="mb-1 block font-medium text-gray-700"
+							>Namespace:</label
+						>
+						<select
+							id="namespace-select"
+							class="w-full rounded border border-gray-300 p-2 text-base disabled:bg-gray-100 disabled:text-gray-500"
+							bind:value={selectedNamespace}
+							disabled={!selectedContext || loading.namespaces}
+						>
+							<option value="">Select namespace...</option>
+							{#each namespaces as namespace}
+								<option value={namespace}>{namespace}</option>
+							{/each}
+						</select>
+						{#if loading.namespaces}
+							<div class="mt-1 text-sm text-gray-500 italic">Loading namespaces...</div>
+						{/if}
+					</div>
+
+					<div class="mb-4">
+						<label for="pod-select" class="mb-1 block font-medium text-gray-700">Pod:</label>
+						<select
+							id="pod-select"
+							class="w-full rounded border border-gray-300 p-2 text-base disabled:bg-gray-100 disabled:text-gray-500"
+							bind:value={selectedPod}
+							disabled={!selectedNamespace || loading.pods}
+						>
+							<option value="">Select pod...</option>
+							{#each pods as pod}
+								<option value={pod.name}>{pod.name} ({pod.status})</option>
+							{/each}
+						</select>
+						{#if loading.pods}
+							<div class="mt-1 text-sm text-gray-500 italic">Loading pods...</div>
+						{/if}
+					</div>
+				</div>
+
+				<div class="flex justify-end gap-2 border-t border-gray-200 p-4">
+					<button
+						class="rounded bg-gray-500 px-4 py-2 text-white hover:bg-gray-600"
+						onclick={closeAddPopup}
+					>
+						Cancel
+					</button>
+					<button
+						class="rounded bg-blue-500 px-4 py-2 text-white hover:bg-blue-600 disabled:cursor-not-allowed disabled:bg-gray-300"
+						onclick={addLogTailing}
+						disabled={!selectedContext || !selectedNamespace || !selectedPod}
+					>
+						Add
+					</button>
+				</div>
+			</div>
+		</div>
 	{/if}
 </div>

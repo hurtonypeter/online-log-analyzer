@@ -412,6 +412,7 @@ server.listen(PORT, () => {
     ║   Kubectl Bridge Server Running!               ║
     ║                                                ║
     ║   Port: ${PORT}                                   ║
+    ║   Webapp: http://localhost:${PORT}                ║
     ║   Health: http://localhost:${PORT}/health         ║
     ║   WebSocket: ws://localhost:${PORT}/stream        ║
     ║                                                ║
