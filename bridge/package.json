@@ -6,6 +6,10 @@
 	"bin": {
 		"json-log-analyzer": "./kubectl-bridge.js"
 	},
+	"files": [
+		"static",
+		"kubectl-bridge.js"
+	],
 	"scripts": {
 		"start": "node kubectl-bridge.js",
 		"dev": "nodemon kubectl-bridge.js"
