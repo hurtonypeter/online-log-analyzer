@@ -434,7 +434,15 @@
 			<!-- Filter Section -->
 			<div class="mb-6 rounded-lg border border-gray-200 bg-white p-4">
 				<div class="mb-3 flex items-center justify-between">
-					<h2 class="text-lg font-semibold">Filter Logs</h2>
+					<div class="flex items-center gap-4">
+						<h2 class="text-lg font-semibold">Filter Logs</h2>
+						<span class="text-xs text-gray-600">
+							Showing {filteredLogs.length} of {parsedLogs.length} log entries
+							{#if filterExpressions.some((f) => f.enabled)}
+								(filtered)
+							{/if}
+						</span>
+					</div>
 					<div class="flex items-center gap-2">
 						<button
 							onclick={() => addFilterExpression()}
@@ -576,13 +584,6 @@
 							</tbody>
 						</table>
 					</div>
-				</div>
-
-				<div class="mt-4 text-sm text-gray-600">
-					Showing {filteredLogs.length} of {parsedLogs.length} log entries
-					{#if filterExpressions.some((f) => f.enabled)}
-						(filtered)
-					{/if}
 				</div>
 			{:else if parsedLogs.length > 0}
 				<div class="py-8 text-center text-gray-500">
